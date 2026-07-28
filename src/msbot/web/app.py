@@ -92,6 +92,23 @@ _pattern_store = PatternSettingsStore(
 # lookups, distinct from the scrape fetcher's per-host 429 backoff tuning.
 _airport_fetcher = Fetcher(min_interval=0.3, jitter=0.2, timeout=15, retries=2)
 
+
+def _browser_available() -> bool:
+    """Whether a Playwright-driven scraper (mrbilit) can run at all in this
+    process. False in the production Docker image on purpose — it doesn't
+    ship Playwright/Chromium to keep the image light — so the dashboard can
+    grey the checkbox out instead of letting the user enable a source that's
+    guaranteed to fail 3 times and get circuit-broken on every single run.
+    """
+    try:
+        import playwright  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+_BROWSER_AVAILABLE = _browser_available()
+
 #: display labels for /api/meta — keyed the same as regulated.DEFAULT_REGULATED_ALIASES
 REGULATED_LABELS_FA = {
     "mahan": "ماهان",
@@ -167,8 +184,9 @@ def meta() -> Dict[str, Any]:
                 "id": c.name,
                 "label": c.label,
                 "requires_browser": c.requires_browser,
+                "available": (not c.requires_browser) or _BROWSER_AVAILABLE,
                 "host": SOURCE_HOST.get(c.name),
-                "default_enabled": c.name in _cfg["sources"],
+                "default_enabled": c.name in _cfg["sources"] and ((not c.requires_browser) or _BROWSER_AVAILABLE),
             }
             for c in scraper_classes
         ],
@@ -234,12 +252,16 @@ def last_job(route_id: str) -> Dict[str, Any]:
 def start_scrape(req: ScrapeRequest) -> Dict[str, Any]:
     if not req.route_id and not (req.origin and req.destination):
         raise HTTPException(status_code=400, detail="route_id یا origin+destination لازم است")
+    sources = req.sources or list(_cfg["sources"])
+    if not _BROWSER_AVAILABLE:
+        browser_only = {c.name for c in get_scraper_classes() if c.requires_browser}
+        sources = [s for s in sources if s not in browser_only]
     try:
         job = _jobs.start(
             _cfg,
             start_date=req.start_date,
             end_date=req.end_date,
-            sources=req.sources or list(_cfg["sources"]),
+            sources=sources,
             route_ids=[req.route_id] if req.route_id else None,
             origin=req.origin.model_dump() if req.origin else None,
             destination=req.destination.model_dump() if req.destination else None,

@@ -22,6 +22,7 @@ Each card is ``div.trip-package-info`` and its text reads:
 """
 from __future__ import annotations
 
+import random
 import re
 from typing import List, Optional
 
@@ -61,16 +62,30 @@ class MrBilitScraper(BaseScraper):
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 headless=bool(self.options.get("headless", True)),
+                # a real Chrome window doesn't carry this CDP-automation
+                # marker; disabling it is standard practice for browser
+                # testing/scraping (not aimed at any deliberate challenge —
+                # we still don't touch CAPTCHAs or WAF fingerprint checks).
+                args=["--disable-blink-features=AutomationControlled"],
                 **_launch_target(self.options)
             )
             try:
                 ctx = browser.new_context(
                     locale="fa-IR",
+                    timezone_id="Asia/Tehran",  # a fa-IR locale from a non-Iran clock is its own tell
                     user_agent=(
                         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
                         "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
                     ),
                     viewport={"width": 1440, "height": 900},
+                )
+                # Playwright's default CDP session leaves navigator.webdriver
+                # readable as true; a normal tab never has it set. This one
+                # init script is the extent of the fingerprint work here —
+                # no canvas/WebGL spoofing, no proxying around a real
+                # challenge (CAPTCHA, WAF JS puzzle, etc.), which we won't do.
+                ctx.add_init_script(
+                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
                 )
                 page = ctx.new_page()
                 page.goto(url, wait_until="domcontentloaded", timeout=90000)
@@ -78,7 +93,10 @@ class MrBilitScraper(BaseScraper):
                     page.wait_for_selector("div.trip-package-info", timeout=wait_ms)
                 except Exception:
                     return []  # genuinely no flights, or the stream never finished
-                page.wait_for_timeout(4000)  # let the SignalR stream settle
+                # a fixed, perfectly-repeatable wait is itself a robotic tell;
+                # a little jitter costs nothing and looks more like a person
+                # reading the page before it finishes loading.
+                page.wait_for_timeout(3500 + int(1500 * random.random()))
                 texts = page.eval_on_selector_all(
                     "div.trip-package-info", "els => els.map(e => e.innerText)"
                 )

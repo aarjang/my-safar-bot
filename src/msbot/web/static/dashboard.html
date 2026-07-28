@@ -35,6 +35,7 @@
   .fld .cal-ic{color:var(--muted)}
   .chip{border-radius:999px;padding:4px 11px;font-size:12px;font-weight:600;cursor:pointer;user-select:none;border:1px solid #dfe3ff;background:#eef2ff;color:var(--brand);display:inline-flex;align-items:center;gap:5px}
   .chip.off{background:#fff;color:var(--muted);border-style:dashed}
+  .chip.unavailable{background:#f3f4f6;color:#9ca3af;border-color:#e5e7eb;cursor:not-allowed;text-decoration:line-through}
   .chip .dot{width:7px;height:7px;border-radius:50%;background:#cbd5e1}
   .chip .dot.ok{background:var(--down)}.chip .dot.error{background:var(--up)}.chip .dot.rate_limited{background:var(--accent)}.chip .dot.skipped{background:var(--muted)}
   .chip .dot.running{background:var(--brand2);animation:pulse 1s infinite}
@@ -767,9 +768,14 @@ function esc(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','
 function renderChips(){
   const primary = primarySourceId();
   const ordered = [...state.sources].sort((a,b)=> (a.id===primary?-1:0) - (b.id===primary?-1:0));
-  $('srcChips').innerHTML = ordered.map(s=>
-    `<span class="chip ${state.enabled.has(s.id)?'':'off'}${s.id===primary?' primary':''}" data-src="${s.id}" title="${s.id===primary?'اولویت اصلی — بنچمارک همیشگی':''}"><span class="dot"></span>${s.id===primary?'<span class="star">⭐</span> ':''}${s.label}${s.requires_browser?' 🖥':''}</span>`
-  ).join('');
+  $('srcChips').innerHTML = ordered.map(s=>{
+    const unavailable = s.available===false;
+    const title = unavailable
+      ? 'در دسترس نیست — این منبع به مرورگر (Playwright) نیاز دارد که در این استقرار نصب نشده؛ به‌صورت لوکال با --with-browser اجرا کنید'
+      : (s.id===primary ? 'اولویت اصلی — بنچمارک همیشگی' : '');
+    const cls = ['chip', state.enabled.has(s.id)&&!unavailable?'':'off', s.id===primary?'primary':'', unavailable?'unavailable':''].filter(Boolean).join(' ');
+    return `<span class="${cls}" data-src="${s.id}" ${unavailable?'data-unavailable="1"':''} title="${title}"><span class="dot"></span>${s.id===primary?'<span class="star">⭐</span> ':''}${s.label}${s.requires_browser?' 🖥':''}${unavailable?' ⛔':''}</span>`;
+  }).join('');
 }
 function renderChipsLive(job){
   document.querySelectorAll('#srcChips .chip').forEach(chip=>{
@@ -988,6 +994,7 @@ function exportCSV(){
 $('tabs').addEventListener('click',e=>{const t=e.target.closest('.tab');if(t)switchTab(t.dataset.tab);});
 $('srcChips').addEventListener('click',e=>{
   const c=e.target.closest('.chip[data-src]'); if(!c) return;
+  if(c.dataset.unavailable){ toast('این منبع در این استقرار در دسترس نیست (نیاز به مرورگر دارد)'); return; }
   const id=c.dataset.src;
   if(state.enabled.has(id)) state.enabled.delete(id); else state.enabled.add(id);
   renderChips(); renderRate();
