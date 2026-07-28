@@ -94,17 +94,21 @@ _airport_fetcher = Fetcher(min_interval=0.3, jitter=0.2, timeout=15, retries=2)
 
 
 def _browser_available() -> bool:
-    """Whether a Playwright-driven scraper (mrbilit) can run at all in this
-    process. False in the production Docker image on purpose — it doesn't
-    ship Playwright/Chromium to keep the image light — so the dashboard can
-    grey the checkbox out instead of letting the user enable a source that's
-    guaranteed to fail 3 times and get circuit-broken on every single run.
+    """Whether a Playwright-driven scraper (mrbilit) can actually run in this
+    process — checked at boot so the dashboard can grey the checkbox out
+    instead of letting the user enable a source that's guaranteed to fail 3
+    times and get circuit-broken on every single run (which is exactly what
+    used to happen: the ``playwright`` package can be installed with no
+    browser binary behind it, e.g. a deployment that skips
+    ``playwright install`` — importing the package alone isn't proof it can
+    launch anything).
     """
     try:
         import playwright  # noqa: F401
-        return True
     except ImportError:
         return False
+    from ..scrapers.mrbilit import local_chrome_path
+    return local_chrome_path() is not None
 
 
 _BROWSER_AVAILABLE = _browser_available()

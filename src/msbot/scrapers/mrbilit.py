@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import random
 import re
+from pathlib import Path
 from typing import List, Optional
 
 from ..models import FlightOffer, RouteSpec, normalize_cabin
@@ -66,7 +67,17 @@ class MrBilitScraper(BaseScraper):
                 # marker; disabling it is standard practice for browser
                 # testing/scraping (not aimed at any deliberate challenge —
                 # we still don't touch CAPTCHAs or WAF fingerprint checks).
-                args=["--disable-blink-features=AutomationControlled"],
+                # --no-sandbox/--disable-dev-shm-usage are the standard,
+                # widely-documented flags for running headless Chromium as a
+                # non-root user in a container (no real Docker/root access to
+                # set up the sandbox's namespaces; a small /dev/shm otherwise
+                # crashes Chromium) — not a fingerprint change, just what
+                # containerized Chrome needs to start at all.
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                ],
                 **_launch_target(self.options)
             )
             try:
@@ -159,9 +170,19 @@ _LOCAL_CHROMES = [
 ]
 
 
+def local_chrome_path() -> Optional[str]:
+    """First existing browser binary from ``_LOCAL_CHROMES``, if any — used by
+    the dashboard's availability check so it doesn't just trust that the
+    ``playwright`` package imports (that gap is exactly what let mrbilit get
+    enabled with no actual browser to launch in the first place)."""
+    for candidate in _LOCAL_CHROMES:
+        if Path(candidate).exists():
+            return candidate
+    return None
+
+
 def _launch_target(options: dict) -> dict:
     import os
-    from pathlib import Path
 
     explicit = options.get("executable_path") or os.environ.get("MSBOT_CHROME")
     if explicit:

@@ -18,6 +18,11 @@ services:
       - ./reports:/app/reports
       # mount your own config over the example if you have route/rate-limit
       # customizations: - ./config.yaml:/app/config.yaml:ro
+    # mrbilit's scraper launches a real Chromium per request — on a shared
+    # host, cap it so a stuck/leaking browser process can't starve whatever
+    # else is running on the same machine.
+    mem_limit: 1.5g
+    memswap_limit: 2g
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost',8765),timeout=3)"]
       interval: 30s
