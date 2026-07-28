@@ -1,0 +1,97 @@
+# Copy to config.yaml and adjust. Any key you omit falls back to msbot/config.py defaults.
+
+routes:
+  - id: THR-IST
+    origin_city: THR
+    destination_city: IST
+    origin_airport: IKA
+    destination_airport: IST
+    tktfly_origin: Tehran
+    tktfly_destination: Istanbul
+    mysafar_origin: IKA
+    mysafar_destination: ISTALL
+    label_fa: "تهران به استانبول"
+    origin_label_fa: "تهران"
+    destination_label_fa: "استانبول"
+  # Add more routes the same way — every field above is required per route
+  # because each site names cities differently (IATA vs airport code vs English name).
+
+# mrbilit needs --with-browser (Playwright); the rest are plain HTTP.
+sources: [mysafar, tktfly, flytoday, alibaba, snapptrip]
+
+days: 30              # how many departure dates per route (default: tomorrow + N-1)
+adults: 1
+both_directions: true # also scrape destination -> origin, per the client's own workflow
+
+rate_limit:
+  min_interval: 2.5    # seconds between requests to the same host
+  jitter: 1.5
+  timeout: 60
+  retries: 3
+  per_host:             # override min_interval for specific hosts
+    www.flytoday.ir: 12.0
+    ws.alibaba.ir: 3.0
+  per_host_ceiling: 45.0       # a 429-stretched host's floor can never exceed this
+  max_request_budget: 120.0   # give up on a single request past this much total wait
+  max_consecutive_errors: 3   # trip the circuit breaker after this many fails in a row
+
+storage:
+  path: data/history.sqlite
+
+reports:
+  dir: reports
+
+markup:
+  base: mysafar         # file | mysafar | min  (see src/msbot/markup.py docstring)
+  base_file: null        # data/base_fares.csv when base: file
+
+# The agency's own described workflow (see src/msbot/pattern.py): tktfly
+# (آماده سفر) is the primary benchmark; we expect to sit ~10k Toman below it
+# and 100-200k Toman below every other site. Rows outside this band are
+# flagged as needing a markup look — this is what "تحلیل رقبا" actually checks
+# for, not just printing every price side by side.
+#
+# This whole block is also editable live from the dashboard's "تنظیمات
+# مارک‌آپ" tab (POST /api/pattern-config) — edits there are written to
+# data/pattern_overrides.json and take effect instantly on already-scraped
+# data, no restart or re-scrape needed. What's below is only the *starting*
+# default; per-cabin bands are what actually gets applied (see `cabins:`) —
+# only "economy" is a number the client gave verbatim, the rest are scaled
+# guesses meant to be corrected from real experience.
+expected_pattern:
+  primary_source: tktfly
+  # fallback for any cabin not listed under `cabins:` below
+  default:
+    primary_diff_toman_min: 5000    # ~10k Toman below tktfly is normal
+    primary_diff_toman_max: 20000
+    other_diff_toman_min: 80000     # 100-200k Toman below other sites is normal
+    other_diff_toman_max: 250000
+  cabins:
+    economy:
+      primary_diff_toman_min: 5000
+      primary_diff_toman_max: 20000
+      other_diff_toman_min: 80000
+      other_diff_toman_max: 250000
+    premium_economy:               # scaled guess — tune from real data
+      primary_diff_toman_min: 8000
+      primary_diff_toman_max: 35000
+      other_diff_toman_min: 120000
+      other_diff_toman_max: 400000
+    business:                      # scaled guess — tune from real data
+      primary_diff_toman_min: 10000
+      primary_diff_toman_max: 60000
+      other_diff_toman_min: 150000
+      other_diff_toman_max: 800000
+    first:                         # scaled guess — tune from real data
+      primary_diff_toman_min: 15000
+      primary_diff_toman_max: 100000
+      other_diff_toman_min: 200000
+      other_diff_toman_max: 1200000
+
+scraper_options:
+  mrbilit:
+    wait_ms: 25000
+    headless: true
+    # executable_path: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+
+proxy: null              # e.g. "http://user:pass@host:port" if IPs start getting blocked

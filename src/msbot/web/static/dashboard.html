@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>مای‌سفر — سامانهٔ مقایسه و پایش نرخ پروازها</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap');
+  :root{
+    --brand:#3730a3;--brand2:#4f46e5;--ink:#0f172a;--muted:#64748b;--line:#e5e7eb;--bg:#f4f5fb;--card:#fff;--accent:#f5b301;
+    --up-bg:#fef2f2;--up:#b91c1c;--down-bg:#ecfdf5;--down:#047857;--eq-bg:#f1f5f9;--eq:#475569;--warn-bg:#fffbeb;--warn:#b45309;
+    --radius:16px;--shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Vazirmatn','Noto Sans Arabic',Tahoma,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.7;font-size:14px}
+  .ribbon{background:#0b1020;color:#cbd5e1;text-align:center;font-size:12.5px;padding:7px 12px}
+  .ribbon b{color:#fff}
+  header.app{background:linear-gradient(90deg,var(--brand),var(--brand2));color:#fff;padding:18px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .logo{display:flex;align-items:center;gap:12px}
+  .logo .mark{width:42px;height:42px;border-radius:11px;background:#fff;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.12)}
+  .logo h1{font-size:19px;margin:0;font-weight:800}.logo p{margin:0;font-size:12px;opacity:.85}
+  header .env{font-size:12px;background:rgba(255,255,255,.14);padding:6px 12px;border-radius:999px}
+  .wrap{max-width:1280px;margin:20px auto;padding:0 18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .search{padding:16px 18px;margin-bottom:14px;position:relative;z-index:5}
+  .search .row{display:grid;grid-template-columns:1.1fr 1.1fr 1.4fr 2.6fr auto;gap:12px;align-items:end}
+  .fld{position:relative}
+  .fld label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600}
+  .fld .ctrl{border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#fbfbfe;font-size:13px;min-height:44px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:text}
+  .fld .ctrl.click{cursor:pointer}
+  .fld .ctrl.focus{border-color:var(--brand2);box-shadow:0 0 0 3px #e0e7ff}
+  .fld .ctrl.disabled{opacity:.55;cursor:not-allowed}
+  .fld input.town{border:none;background:transparent;font-family:inherit;font-size:13px;color:var(--ink);width:100%;height:42px;outline:none}
+  .fld .datev{flex:1;color:var(--ink)}
+  .fld .cal-ic{color:var(--muted)}
+  .chip{border-radius:999px;padding:4px 11px;font-size:12px;font-weight:600;cursor:pointer;user-select:none;border:1px solid #dfe3ff;background:#eef2ff;color:var(--brand);display:inline-flex;align-items:center;gap:5px}
+  .chip.off{background:#fff;color:var(--muted);border-style:dashed}
+  .chip .dot{width:7px;height:7px;border-radius:50%;background:#cbd5e1}
+  .chip .dot.ok{background:var(--down)}.chip .dot.error{background:var(--up)}.chip .dot.rate_limited{background:var(--accent)}.chip .dot.skipped{background:var(--muted)}
+  .chip .dot.running{background:var(--brand2);animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .btn{background:var(--brand2);color:#fff;border:none;border-radius:10px;padding:12px 20px;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;min-height:44px}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .btn:active:not(:disabled){transform:translateY(1px)}
+  .btn.ghost{background:#f5f7ff;color:var(--brand);border:1px solid #dfe3ff}
+  .btn.danger{background:#fff1f2;color:var(--up);border:1px solid #fecdd3}
+  .btn.sm{padding:8px 14px;font-size:12.5px;min-height:36px}
+  .hint{margin:11px 2px 0;font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}.hint b{color:var(--ink)}
+  .hint.err{color:var(--up)}
+  .prog{height:5px;border-radius:99px;background:#eef2f7;overflow:hidden;margin-top:12px;display:none}
+  .prog.show{display:block}
+  .prog > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--brand2));transition:width .4s ease}
+  .progtxt{font-size:11.5px;color:var(--muted);margin-top:6px;display:none}
+  .progtxt.show{display:block}
+  /* popovers */
+  .pop{position:absolute;top:calc(100% + 6px);right:0;left:0;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(16,24,40,.16);z-index:40;display:none;overflow:hidden}
+  .pop.show{display:block}
+  .ac-item{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid #f4f5f9}
+  .ac-item:last-child{border:none}
+  .ac-item:hover,.ac-item.active{background:#eef2ff}
+  .ac-item .code{font-weight:800;color:var(--brand);font-size:12px;min-width:38px}
+  .ac-item .city{font-weight:600}.ac-item .apn{color:var(--muted);font-size:11.5px;margin-inline-start:auto}
+  .ac-empty{padding:12px;color:var(--muted);text-align:center;font-size:12.5px}
+  /* calendar */
+  .cal{width:300px;padding:12px}
+  .cal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .cal-h button{border:none;background:#f1f5ff;color:var(--brand);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:16px;font-family:inherit}
+  .cal-h .lbl{font-weight:800}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .cal-grid .wd{text-align:center;font-size:11px;color:var(--muted);font-weight:700;padding:4px 0}
+  .cal-grid .d{text-align:center;padding:7px 0;border-radius:8px;cursor:pointer;font-size:12.5px;font-variant-numeric:tabular-nums}
+  .cal-grid .d:hover{background:#eef2ff}
+  .cal-grid .d.blank{cursor:default}
+  .cal-grid .d.in{background:#eef2ff;border-radius:0}
+  .cal-grid .d.edge{background:var(--brand2);color:#fff;font-weight:800}
+  .cal-grid .d.past{color:#cbd5e1;cursor:not-allowed}
+  .cal-f{display:flex;align-items:center;justify-content:space-between;margin-top:10px;gap:8px}
+  .cal-f .seltxt{font-size:12px;color:var(--muted)}
+  .cal-f button{font-family:inherit;font-size:12.5px;border-radius:8px;padding:7px 12px;cursor:pointer;border:1px solid var(--line);background:#fff}
+  .cal-f button.ok{background:var(--brand2);color:#fff;border-color:var(--brand2);font-weight:700}
+  .tabs{display:flex;gap:8px;margin:4px 2px 14px;flex-wrap:wrap;position:relative;z-index:1}
+  .tab{padding:10px 18px;border-radius:10px;font-weight:700;font-size:13.5px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--muted)}
+  .tab.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+  .kpi.highlight{border-color:#fde68a;background:linear-gradient(180deg,#fffbeb,#fff)}
+  .chip.primary{border-color:var(--accent);background:#fffbeb}
+  .chip .star{color:var(--accent)}
+  .badge.ok2{background:var(--down-bg);color:var(--down)}
+  .kpi{padding:15px 16px}.kpi .k{font-size:12px;color:var(--muted);font-weight:600}.kpi .v{font-size:23px;font-weight:800;margin-top:3px}.kpi .s{font-size:12px;margin-top:2px;color:var(--muted)}
+  .v.up{color:var(--up)}.v.down{color:var(--down)}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .toolbar .grow{flex:1}
+  select,input[type=search]{font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:9px;padding:9px 11px;background:#fbfbfe;color:var(--ink);cursor:pointer}
+  input[type=search]{cursor:text;min-width:210px}
+  .sec-h{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--line)}
+  .sec-h h2{margin:0;font-size:16px;font-weight:800}
+  .tblwrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:820px}
+  thead th{background:#f8fafc;color:var(--muted);font-weight:700;font-size:12px;padding:10px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  thead th[data-sort]{cursor:pointer;user-select:none}
+  thead th[data-sort]:hover{color:var(--brand)}
+  thead th .ar{font-size:10px;opacity:.7;margin-inline-start:3px}
+  tbody td{padding:10px;border-bottom:1px solid #f1f2f6;vertical-align:middle;white-space:nowrap}
+  tbody tr:hover{background:#fafaff}
+  .price{font-weight:700;font-variant-numeric:tabular-nums}
+  .min{color:var(--down);font-weight:800}
+  .na{color:var(--warn)}
+  .sub{color:var(--muted);font-size:11px}
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:11.5px;font-weight:700}
+  .badge.up{background:var(--up-bg);color:var(--up)}.badge.down{background:var(--down-bg);color:var(--down)}
+  .badge.eq{background:var(--eq-bg);color:var(--eq)}.badge.warn{background:var(--warn-bg);color:var(--warn)}
+  .diff{font-weight:800;font-variant-numeric:tabular-nums}.diff.up{color:var(--up)}.diff.down{color:var(--down)}.diff.eq{color:var(--eq)}
+  .empty{padding:26px;text-align:center;color:var(--muted)}
+  .cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;padding:16px}
+  .ccard{border:1px solid var(--line);border-radius:14px;padding:14px 15px;background:#fff}
+  .ccard .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .ccard .nm{font-weight:800;font-size:15px}
+  .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#eef2ff;color:var(--brand)}
+  .tag.meta{background:#fef9c3;color:#854d0e}.tag.blk{background:#fff1f2;color:var(--up)}
+  .ccard .ins{font-size:12px;color:var(--muted);min-height:34px;margin-bottom:10px}
+  .metric{display:flex;justify-content:space-between;font-size:12px;padding:3px 0}
+  .metric b{font-variant-numeric:tabular-nums}
+  .bar{height:8px;border-radius:99px;background:#eef2f7;overflow:hidden;margin-top:4px}
+  .bar > span{display:block;height:100%;border-radius:99px}
+  .idxrow{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .idxrow .lab{font-size:11px;color:var(--muted);width:96px}
+  .idxrow .val{font-size:12px;font-weight:800;width:52px;text-align:left}
+  .cov .item{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #f1f2f6}
+  .cov .item:last-child{border:none}
+  .cov .nm{display:flex;align-items:center;gap:9px;font-weight:600}
+  .tick{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:11px;color:#fff}
+  .tick.g{background:var(--down)}.tick.r{background:var(--up)}.tick.y{background:var(--accent)}.tick.gray{background:#cbd5e1}
+  .st.ok{color:var(--down);font-weight:700}.st.bad{color:var(--up);font-weight:700}.st.warn2{color:var(--warn);font-weight:700}.st.muted{color:var(--muted);font-weight:700}
+  .pct{font-size:11px;color:var(--muted)}
+  .note{margin:14px 16px;padding:12px 15px;background:var(--warn-bg);border:1px solid #fde68a;border-radius:12px;font-size:12.5px;color:#7c5310}
+  .note.info{background:#eef2ff;border-color:#dfe3ff;color:var(--brand)}
+  .runbar{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:16px}
+  .runbar .b{border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+  .runbar .b .k{font-size:12px;color:var(--muted);font-weight:600}.runbar .b .v{font-weight:800;margin-top:3px}
+  footer.legend{margin-top:14px;padding:13px 16px;font-size:12px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  .hidden{display:none}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:80;max-width:90vw;text-align:center}
+  .toast.show{opacity:1}
+  @media(max-width:900px){.search .row{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:1fr 1fr}}
+  @media(max-width:1200px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  .kpi .k{cursor:help;border-bottom:1px dotted var(--muted)}
+  .quick{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .quick .qchip{border:1px dashed #dfe3ff;background:#fbfbfe;color:var(--brand);border-radius:999px;padding:5px 12px;font-size:12px;cursor:pointer}
+  .quick .qchip:hover{background:#eef2ff}
+  .settings-grid{width:100%;border-collapse:collapse;font-size:13px}
+  .settings-grid th{background:#f8fafc;color:var(--muted);font-weight:700;font-size:11.5px;padding:9px;text-align:center;border-bottom:1px solid var(--line)}
+  .settings-grid td{padding:8px;border-bottom:1px solid #f1f2f6;text-align:center}
+  .settings-grid td:first-child{text-align:right;font-weight:700}
+  .settings-grid input{width:90px;font-family:inherit;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;text-align:center;font-variant-numeric:tabular-nums}
+  .settings-grid input:focus{border-color:var(--brand2);outline:none;box-shadow:0 0 0 2px #e0e7ff}
+  .settings-actions{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--line)}
+  .settings-head{display:flex;align-items:center;gap:10px;padding:14px 18px;flex-wrap:wrap}
+  .settings-head label{font-size:12.5px;color:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+<div class="ribbon" id="ribbon">در حال اتصال به سرور محلی…</div>
+
+<header class="app">
+  <div class="logo">
+    <span class="mark" aria-label="لوگوی مای‌سفر">
+      <svg width="30" height="30" viewBox="0 0 120 120" role="img" aria-label="مای‌سفر">
+        <rect x="20" y="34" width="20" height="60" rx="10" fill="#4A73E8"/>
+        <rect x="80" y="34" width="20" height="60" rx="10" fill="#4A73E8"/>
+        <path d="M50 34 a10 10 0 0 1 20 0 v34 a20 20 0 0 1 -20 20 h-2 a8 8 0 0 1 0 -16 h2 a4 4 0 0 0 4 -4 Z" fill="#F4B23E"/>
+      </svg>
+    </span>
+    <div><h1>مای‌سفر</h1><p>سامانهٔ مقایسه و پایش نرخ پروازها</p></div>
+  </div>
+  <div class="env" id="envLabel"></div>
+</header>
+
+<div class="wrap">
+  <div class="card search">
+    <div class="row">
+      <div class="fld">
+        <label>مبدأ سفر (هر شهری که مای‌سفر می‌فروشد)</label>
+        <div class="ctrl" id="origCtrl"><input class="town" id="orig" autocomplete="off" spellcheck="false" placeholder="مثلاً تهران"></div>
+        <div class="pop" id="origPop"></div>
+      </div>
+      <div class="fld">
+        <label>مقصد سفر (جستجوی زنده — همهٔ مقاصد)</label>
+        <div class="ctrl" id="destCtrl"><input class="town" id="dest" autocomplete="off" spellcheck="false" placeholder="مثلاً استانبول، دبی، آنتالیا…"></div>
+        <div class="pop" id="destPop"></div>
+      </div>
+      <div class="fld">
+        <label>بازهٔ تاریخ پرواز</label>
+        <div class="ctrl click" id="dateBtn"><span class="datev" id="dateVal">—</span><span class="cal-ic">📅</span></div>
+        <div class="pop" id="calPop"></div>
+      </div>
+      <div class="fld">
+        <label>منابع رقیب (برای فعال/غیرفعال‌سازی بزنید)</label>
+        <div class="ctrl" id="srcChips" style="cursor:default"></div>
+      </div>
+      <div class="fld"><label>&nbsp;</label>
+        <button class="btn" id="analyzeBtn">تحلیل نرخ‌ها</button>
+      </div>
+    </div>
+    <div class="hint" id="routeHint"></div>
+    <div class="quick" id="quickRoutes"></div>
+    <div class="prog" id="prog"><i></i></div>
+    <div id="cancelWrap" class="hidden" style="margin-top:8px"><button class="btn danger sm" id="cancelBtn">توقف استعلام</button></div>
+    <div class="progtxt" id="progtxt"></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="rate">گزارش اختلاف نرخ</div>
+    <div class="tab" data-tab="comp">تحلیل رقبا</div>
+    <div class="tab" data-tab="cov">پوشش و اجرا</div>
+    <div class="tab" data-tab="settings">تنظیمات مارک‌آپ</div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="note info" id="patternNote" style="margin:0 0 14px"></div>
+
+  <div id="view-rate" class="card">
+    <div class="toolbar">
+      <select id="cabin">
+        <option value="all">همهٔ کلاس‌ها</option>
+        <option value="economy">اکونومی</option>
+        <option value="premium_economy">پرمیوم اکونومی</option>
+        <option value="business">بیزینس</option>
+      </select>
+      <select id="dir">
+        <option value="all">همهٔ وضعیت‌ها</option>
+        <option value="anomaly">فقط: نیاز به بررسی مارک‌آپ</option>
+        <option value="pattern_ok">فقط: در الگوی معمول</option>
+        <option value="up">فقط: ما گران‌تر از رقبا</option>
+        <option value="down">فقط: ما ارزان‌تر از رقبا</option>
+        <option value="eq">فقط: برابر</option>
+        <option value="na">فقط: دادهٔ ناقص</option>
+      </select>
+      <span class="grow"></span>
+      <button class="btn ghost" id="csvBtn">⬇ خروجی CSV</button>
+    </div>
+    <div class="tblwrap"><table id="rateTbl"></table></div>
+    <div class="note" id="rateNote">برای شروع، مبدأ/مقصد و بازهٔ تاریخ را انتخاب و «تحلیل نرخ‌ها» را بزنید.</div>
+  </div>
+
+  <div id="view-comp" class="card hidden">
+    <div class="sec-h"><h2>تحلیل رقبا — هر رقیب چه می‌کند؟</h2><span class="sub">شاخص قیمت نسبت به ما · ۱۰۰ = برابر، کمتر = ارزان‌تر</span></div>
+    <div class="cgrid" id="cgrid"></div>
+    <div class="tblwrap" style="padding:0 4px 4px"><table id="compTbl"></table></div>
+  </div>
+
+  <div id="view-cov" class="card hidden">
+    <div class="sec-h"><h2>پوشش منابع و اجرای خودکار</h2></div>
+    <div class="cov" id="covList"></div>
+    <div class="runbar">
+      <div class="b"><div class="k">آخرین اجرا</div><div class="v" id="lastRunV">—</div></div>
+      <div class="b"><div class="k">مدت اجرای آخر</div><div class="v" id="lastElapsedV">—</div></div>
+      <div class="b"><div class="k">محدودیت نرخ درخواست</div><div class="v" id="rateLimitV">—</div></div>
+    </div>
+    <div class="note info" id="rateLimitNote"></div>
+    <div class="note">هر نرخ دارای مهر زمانی و منبع است و در پایگاه‌دادهٔ محلی (SQLite) ذخیره می‌شود. اجرا دستی است (با دکمهٔ «تحلیل نرخ‌ها»)؛ منابع ناموفق با برچسب «خطا» می‌آیند، نه حذف خاموش یا داده جعلی.</div>
+  </div>
+
+  <div id="view-settings" class="card hidden">
+    <div class="sec-h"><h2>تنظیمات الگوی مارک‌آپ</h2><span class="sub">برای هر کلاس پروازی جدا قابل تنظیم است — تغییرات فوری و بدون نیاز به اسکرپ دوباره اعمال می‌شود</span></div>
+    <div class="settings-head">
+      <label>منبع اصلی (بنچمارک):</label>
+      <select id="primarySourceSelect"></select>
+      <span class="sub">این سایت با ⭐ در همه‌جای داشبورد مشخص می‌شود و اولویت مقایسه با آن است.</span>
+    </div>
+    <div class="tblwrap" style="padding:0 18px">
+      <table class="settings-grid" id="settingsTbl"></table>
+    </div>
+    <div class="settings-actions">
+      <button class="btn" id="saveSettingsBtn">ذخیره تنظیمات</button>
+      <button class="btn ghost" id="resetSettingsBtn">بازگشت به پیش‌فرض‌ها</button>
+      <span class="grow"></span>
+      <span class="sub" id="settingsSavedNote"></span>
+    </div>
+    <div class="note">عدد پیش‌فرض کلاس اکونومی مستقیماً از توضیح خودتان است («حدود ۱۰ هزار تومان با آماده‌سفر»، «۱۰۰ تا ۲۰۰ هزار با بقیه»). اعداد بیزینس/پرمیوم/فرست فعلاً برآورد مقیاس‌شده‌اند (چون قیمت این کلاس‌ها ۲ تا ۴ برابر اکونومی است) — لطفاً با تجربهٔ واقعی خودتان این‌ها را اصلاح کنید.</div>
+  </div>
+
+  <footer class="legend card">
+    <span><b>راهنما:</b></span>
+    <span><span class="badge ok2">✓ در الگوی معمول</span> اختلاف با آماده‌سفر/رقبا طبق روال همیشگی — نیازی به تغییر نیست</span>
+    <span><span class="badge warn">⚠ نیاز به بررسی مارک‌آپ</span> این پرواز از الگوی معمول خارج شده</span>
+    <span><span class="badge up">▲ ما گران‌تر</span> از کمترین قیمت بازار</span>
+    <span><span class="badge down">▼ ما ارزان‌تر</span> از کمترین قیمت بازار</span>
+  </footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ================= Utilities ================= */
+const $ = id => document.getElementById(id);
+const FA = '۰۱۲۳۴۵۶۷۸۹';
+const toFa = s => (''+s).replace(/\d/g, d=>FA[d]);
+const pad2 = n => (n<10?'0':'')+n;
+const fmt = n => (n==null ? '—' : Number(n).toLocaleString('fa-IR'));
+const pctFmt = n => (n==null?'—':(n>0?'+':'') + n.toLocaleString('fa-IR',{maximumFractionDigits:1}) + '٪');
+const CABIN_FA = {economy:'اکونومی', premium_economy:'پرمیوم اکونومی', business:'بیزینس', first:'فرست', unknown:'نامشخص'};
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    let msg = res.statusText;
+    try { const j = await res.json(); msg = j.detail || msg; } catch(e){}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+/* ================= Jalali calendar core (jalaali algorithm) ================= */
+function div(a,b){return Math.trunc(a/b);}
+function mod(a,b){return a-Math.trunc(a/b)*b;}
+function jalCal(jy){
+  const breaks=[-61,9,38,199,426,686,756,818,1111,1181,1210,1635,2060,2097,2192,2262,2324,2394,2456,3178];
+  const bl=breaks.length, gy=jy+621; let leapJ=-14, jp=breaks[0], jm,jump=0,leap,n,i;
+  for(i=1;i<bl;i++){jm=breaks[i];jump=jm-jp;if(jy<jm)break;leapJ+=div(jump,33)*8+div(mod(jump,33),4);jp=jm;}
+  n=jy-jp;
+  leapJ+=div(n,33)*8+div(mod(n,33)+3,4);
+  if(mod(jump,33)===4&&jump-n===4)leapJ++;
+  const leapG=div(gy,4)-div((div(gy,100)+1)*3,4)-150;
+  const march=20+leapJ-leapG;
+  if(jump-n<6)n=n-jump+div(jump+4,33)*33;
+  leap=mod(mod(n+1,33)-1,4); if(leap===-1)leap=4;
+  return {leap,gy,march};
+}
+const isLeapJ = jy => jalCal(jy).leap===0;
+function monthLen(jy,jm){ if(jm<=6)return 31; if(jm<=11)return 30; return isLeapJ(jy)?30:29; }
+function g2d(gy,gm,gd){let d=div((gy+div(gm-8,6)+100100)*1461,4)+div(153*mod(gm+9,12)+2,5)+gd-34840408;d=d-div(div(gy+100100+div(gm-8,6),100)*3,4)+752;return d;}
+function j2d(jy,jm,jd){const r=jalCal(jy);return g2d(r.gy,3,r.march)+(jm-1)*31-div(jm,7)*(jm-7)+jd-1;}
+function d2g(jdn){let j=4*jdn+139361631;j=j+div(div(4*jdn+183187720,146097)*3,4)*4-3908;const i=div(mod(j,1461),4)*5+308;const gd=div(mod(i,153),5)+1;const gm=mod(div(i,153),12)+1;const gy=div(j,1461)-100100+div(8-gm,6);return {gy,gm,gd};}
+function toGregorian(jy,jm,jd){return d2g(j2d(jy,jm,jd));}
+function g2jd(gy,gm,gd){return g2d(gy,gm,gd);}
+function toJalali(gy,gm,gd){
+  // invert via binary search over jy since we only have jalCal(jy)->march-equinox day
+  const gdn = g2jd(gy,gm,gd);
+  let jy = gy - 621 - 1;
+  while (true) {
+    const r = jalCal(jy+1);
+    if (g2d(r.gy,3,r.march) > gdn) break;
+    jy++;
+  }
+  const r = jalCal(jy);
+  const dayOfYear = gdn - g2d(r.gy,3,r.march) + 1;
+  let jm, jd, rem = dayOfYear;
+  if (rem <= 186) { jm = Math.ceil(rem/31); jd = rem - (jm-1)*31; }
+  else { rem -= 186; jm = 6 + Math.ceil(rem/30); jd = rem - (jm-7)*30; }
+  return {jy,jm,jd};
+}
+function jWeekday(jy,jm,jd){const g=toGregorian(jy,jm,jd);return (new Date(g.gy,g.gm-1,g.gd).getDay()+1)%7;}
+const MONTHS=['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+const WD=['ش','ی','د','س','چ','پ','ج'];
+const serial = d => d.jy*10000+d.jm*100+d.jd;
+function isoToJalali(iso){ const [gy,gm,gd]=iso.split('-').map(Number); return toJalali(gy,gm,gd); }
+function jalaliToIso(j){ const g=toGregorian(j.jy,j.jm,j.jd); return `${g.gy}-${pad2(g.gm)}-${pad2(g.gd)}`; }
+function fmtDate(d){ if(!d) return '—'; return `${toFa(d.jy)}/${toFa(pad2(d.jm))}/${toFa(pad2(d.jd))}`; }
+function todayJalali(){ const now=new Date(); return toJalali(now.getFullYear(), now.getMonth()+1, now.getDate()); }
+
+/* ================= State ================= */
+const state = {
+  meta: null,
+  sources: [],          // from /api/meta
+  orig: null, dest: null, // full CityRef: {city_code, city_fa, english_name, mysafar_code, country_fa}
+  range: {s:null, e:null},
+  enabled: new Set(),
+  sort: {key:'date_jalali', dir:1}, tab: 'rate',
+  cal: null,
+  jobId: null, job: null, pollTimer: null,
+  rows: [],            // comparison rows from backend
+  matchedRoute: null,  // "AAA-BBB" — the direction actually requested
+};
+
+/* ================= Boot: load meta from backend ================= */
+async function boot(){
+  try {
+    state.meta = await api('/api/meta');
+  } catch(e) {
+    $('ribbon').textContent = 'اتصال به سرور برقرار نشد — مطمئن شوید سرور با «python -m msbot.web» در حال اجراست.';
+    return;
+  }
+  $('ribbon').innerHTML = 'این سامانه به‌صورت <b>زنده</b> و با <b>محدودیت نرخ درخواست</b> قیمت رقبا را استعلام می‌کند — مبدأ/مقصد از جستجوی زندهٔ مای‌سفر می‌آید (همهٔ مقاصد)، و هر اجرا واقعی است و ممکن است چند دقیقه طول بکشد.';
+
+  state.sources = state.meta.sources;
+  state.enabled = new Set(state.sources.filter(s=>s.default_enabled).map(s=>s.id));
+
+  const first = state.meta.routes[0];
+  if (first) {
+    await Promise.all([
+      acO.setInitial({city_code:first.origin_city, city_fa:first.origin_label}),
+      acD.setInitial({city_code:first.destination_city, city_fa:first.destination_label}),
+    ]);
+  }
+  const start = isoToJalali(state.meta.default_start);
+  const endIso = addDaysIso(state.meta.default_start, Math.max(1,state.meta.default_days)-1);
+  const end = isoToJalali(endIso);
+  state.range = {s:start, e:end};
+  $('dateVal').textContent = `${fmtDate(start)} – ${fmtDate(end)}`;
+
+  renderChips();
+  renderQuickRoutes();
+  resolveRoute();
+  updateEnv();
+  renderRateLimitInfo();
+  renderPatternNote();
+  renderSettingsForm();
+  tryLoadLastJob();
+}
+
+function addDaysIso(iso, n){
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y,m-1,d));
+  dt.setUTCDate(dt.getUTCDate()+n);
+  return dt.toISOString().slice(0,10);
+}
+
+function renderQuickRoutes(){
+  const routes = state.meta.routes || [];
+  if (!routes.length) { $('quickRoutes').innerHTML=''; return; }
+  $('quickRoutes').innerHTML = '<span class="sub">میان‌برهای پرکاربرد:</span> ' + routes.map(r =>
+    `<span class="qchip" data-o="${r.origin_city}" data-oc="${r.origin_label}" data-d="${r.destination_city}" data-dc="${r.destination_label}">${r.label_fa}</span>`
+  ).join('');
+}
+$('quickRoutes').addEventListener('click', async e=>{
+  const c = e.target.closest('.qchip'); if(!c) return;
+  await Promise.all([
+    acO.setInitial({city_code:c.dataset.o, city_fa:c.dataset.oc}),
+    acD.setInitial({city_code:c.dataset.d, city_fa:c.dataset.dc}),
+  ]);
+  resolveRoute(); updateEnv(); tryLoadLastJob();
+});
+
+/* Any origin+destination the live search returns is scrapeable — a route is
+   built on the fly (see msbot.web.jobs.adhoc_route). We only warn, never
+   block, when tktfly has no English name for one of the cities (it'll just
+   fail for that one source, shown honestly in the coverage tab). */
+function resolveRoute(){
+  if(!state.orig || !state.dest || state.orig.city_code===state.dest.city_code){
+    setRouteHint(false, 'مبدأ و مقصد را انتخاب کنید (باید متفاوت باشند).');
+    return;
+  }
+  state.matchedRoute = state.orig.city_code+'-'+state.dest.city_code;
+  const missing = [];
+  if (!state.orig.english_name) missing.push(state.orig.city_fa);
+  if (!state.dest.english_name) missing.push(state.dest.city_fa);
+  if (missing.length) {
+    setRouteHint(true, `✓ آماده — توجه: نام انگلیسی «${missing.join('، ')}» یافت نشد، آماده‌سفر احتمالاً برای این مسیر جواب ندهد.`, true);
+  } else {
+    setRouteHint(true, `✓ آماده: ${state.orig.city_fa} ← ${state.dest.city_fa} — هر دو جهت رفت/برگشت با هم استعلام می‌شود.`);
+  }
+}
+function setRouteHint(ok, label, warn){
+  const el = $('routeHint');
+  $('analyzeBtn').disabled = !ok;
+  if (!ok) { state.matchedRoute = null; }
+  el.className = ok ? (warn ? 'hint' : 'hint') : 'hint err';
+  el.textContent = label || '';
+}
+
+function renderRateLimitInfo(){
+  const rl = state.meta.rate_limit;
+  const perHost = Object.entries(rl.per_host||{}).map(([h,v])=>`${h}: ${v.toLocaleString('fa-IR')} ثانیه`).join(' · ');
+  $('rateLimitV').textContent = `حداقل ${rl.min_interval.toLocaleString('fa-IR')} ثانیه`;
+  $('rateLimitNote').textContent = 'برای جلوگیری از بلاک‌شدن، بین درخواست‌های هر سایت حداقل فاصلهٔ زمانی رعایت می‌شود' + (perHost? ' — به‌صورت اختصاصی: '+perHost : '') + '. اگر سایتی خطای ۴۲۹ بدهد، سیستم خودش سرعت را برای همان سایت کم می‌کند و ادامه می‌دهد.';
+}
+
+async function tryLoadLastJob(){
+  if (!state.matchedRoute) return;
+  try {
+    const r = await api('/api/last-job?route_id='+encodeURIComponent(state.matchedRoute));
+    if (r.job && (r.job.status==='done' || r.job.status==='cancelled')) {
+      state.jobId = r.job.id; state.job = r.job;
+      await loadComparison();
+      renderCoverage();
+      $('rateNote').textContent = 'این جدول از آخرین اجرای موفق (' + (r.job.created_at||'') + ') است. برای به‌روزرسانی «تحلیل نرخ‌ها» را بزنید.';
+    }
+  } catch(e) { /* no prior job — fine, empty state stays */ }
+}
+
+/* ================= Run a real scrape ================= */
+let busy=false;
+async function runAnalyze(){
+  if (busy || !state.matchedRoute) return;
+  if (!state.range.s || !state.range.e) { toast('بازهٔ تاریخ را انتخاب کنید'); return; }
+  busy=true;
+  $('analyzeBtn').disabled = true; $('analyzeBtn').textContent = 'در حال استعلام…';
+  const bar=$('prog'), fill=bar.firstElementChild, ptxt=$('progtxt');
+  bar.classList.add('show'); ptxt.classList.add('show'); fill.style.width='0%';
+
+  const body = {
+    origin: state.orig,
+    destination: state.dest,
+    start_date: jalaliToIso(state.range.s),
+    end_date: jalaliToIso(state.range.e),
+    sources: [...state.enabled],
+    adults: 1,
+    both_directions: true,
+    base_strategy: 'mysafar',
+  };
+  try {
+    const r = await api('/api/scrape', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    state.jobId = r.job_id;
+    $('cancelWrap').classList.remove('hidden');
+    await pollJob();
+  } catch(e) {
+    toast('خطا در شروع استعلام: '+e.message);
+    resetAnalyzeBtn();
+  }
+}
+async function cancelAnalyze(){
+  if (!state.jobId) return;
+  try { await api('/api/jobs/'+state.jobId+'/cancel', {method:'POST'}); toast('درخواست توقف ارسال شد…'); }
+  catch(e) { toast('توقف ناموفق: '+e.message); }
+}
+$('cancelBtn').addEventListener('click', cancelAnalyze);
+function resetAnalyzeBtn(){
+  busy=false;
+  $('cancelWrap').classList.add('hidden');
+  $('analyzeBtn').disabled = !state.matchedRoute;
+  $('analyzeBtn').textContent = 'تحلیل نرخ‌ها';
+  $('prog').classList.remove('show'); $('progtxt').classList.remove('show');
+}
+function pollJob(){
+  return new Promise((resolve)=>{
+    let tickN = 0;
+    const tick = async () => {
+      let j;
+      try { j = await api('/api/jobs/'+state.jobId); } catch(e) { resolve(); return; }
+      state.job = j;
+      const pct = j.total ? Math.round(j.done/j.total*100) : 0;
+      $('prog').firstElementChild.style.width = pct+'%';
+      const slow = Object.entries(j.per_source).filter(([,v])=>v.status==='rate_limited').map(([k])=>labelFor(k));
+      const errored = Object.entries(j.per_source).filter(([,v])=>v.status==='error').map(([k])=>labelFor(k));
+      const skipped = Object.entries(j.per_source).filter(([,v])=>v.status==='skipped').map(([k])=>labelFor(k));
+      let extra = '';
+      if (slow.length) extra += ` · در حال کاهش سرعت برای: ${slow.join('، ')}`;
+      if (errored.length) extra += ` · خطا در: ${errored.join('، ')}`;
+      if (skipped.length) extra += ` · رد شد (بعد از خطاهای پیاپی): ${skipped.join('، ')}`;
+      $('progtxt').textContent = `${toFa(j.done)}/${toFa(j.total)} درخواست انجام شد${extra}`;
+      renderChipsLive(j);
+      renderCoverage();
+      tickN++;
+      // refresh the visible table every ~6s while still running too, so a
+      // slow/skipped source never hides data the fast sources already found
+      if (tickN % 5 === 0) { try { await loadComparison(); } catch(e){} }
+      if (j.status==='done' || j.status==='cancelled' || j.status==='error') {
+        if (j.status==='error') toast('استعلام با خطا متوقف شد: '+(j.error||''));
+        else toast(j.status==='cancelled' ? 'استعلام لغو شد' : 'استعلام کامل شد ✓');
+        await loadComparison();
+        resetAnalyzeBtn();
+        resolve();
+        return;
+      }
+      state.pollTimer = setTimeout(tick, 1200);
+    };
+    tick();
+  });
+}
+function labelFor(sourceId){ const s=state.sources.find(x=>x.id===sourceId); return s?s.label:sourceId; }
+
+async function loadComparison(){
+  if (!state.jobId) return;
+  const r = await api('/api/comparison?job_id='+state.jobId);
+  state.rows = r.rows || [];
+  recompute();
+}
+
+/* ================= Analysis over backend rows ================= */
+function primarySourceId(){ return state.meta?.expected_pattern?.primary_source || null; }
+function activeSourceIds(){
+  const ids = state.sources.map(s=>s.id).filter(id=>id!=='mysafar');
+  const primary = primarySourceId();
+  // tktfly (the agency's own primary benchmark) always leads the competitor
+  // columns — matches "اولویت اصلی همیشه سایت آماده سفره"
+  return primary && ids.includes(primary) ? [primary, ...ids.filter(id=>id!==primary)] : ids;
+}
+function rowDir(row){
+  const us = row.mysafar_toman, min = row.market_min_toman;
+  if (us==null || min==null) return 'na';
+  if (us>min) return 'up'; if (us<min) return 'down'; return 'eq';
+}
+function rowDiff(row){ if(row.mysafar_toman==null||row.market_min_toman==null) return null; return row.mysafar_toman-row.market_min_toman; }
+function rowPct(row){ const d=rowDiff(row); if(d==null||!row.market_min_toman) return null; return d/row.market_min_toman*100; }
+function filteredRows(){
+  const dirF=$('dir').value, cabinF=$('cabin').value;
+  let rows = state.rows.filter(r => state.matchedRoute ? r.route===state.matchedRoute : true);
+  if (cabinF!=='all') rows = rows.filter(r=>r.cabin===cabinF);
+  if (dirF==='anomaly') rows = rows.filter(r=>r.pattern_ok===false);
+  else if (dirF==='pattern_ok') rows = rows.filter(r=>r.pattern_ok===true);
+  else if (dirF!=='all') rows = rows.filter(r=>rowDir(r)===dirF);
+  const {key,dir}=state.sort;
+  rows = rows.slice().sort((x,y)=>{
+    if(key==='date_jalali') return x.date<y.date ? -dir : x.date>y.date ? dir : 0;
+    const av = key==='mysafar_toman'?x.mysafar_toman: (key==='diff'?rowDiff(x):x[key]);
+    const bv = key==='mysafar_toman'?y.mysafar_toman: (key==='diff'?rowDiff(y):y[key]);
+    const a = av==null?-1e18:av, b = bv==null?-1e18:bv;
+    return (a-b)*dir;
+  });
+  return rows;
+}
+
+function renderPatternNote(){
+  const p = state.meta?.expected_pattern;
+  if (!p) { $('patternNote').textContent=''; return; }
+  const primaryLabel = labelFor(p.primary_source);
+  const d = p.default;
+  $('patternNote').innerHTML = `<b>الگوی مورد انتظار (طبق روال فعلی شما):</b> اولویت اصلی مقایسه با <b>${primaryLabel}</b> است — برای اکونومی، نرخ مای‌سفر معمولاً باید <b>${fmt(d.primary_diff_toman_min)} تا ${fmt(d.primary_diff_toman_max)} تومان</b> پایین‌تر از آن باشد، و از سایر رقبا <b>${fmt(d.other_diff_toman_min)} تا ${fmt(d.other_diff_toman_max)} تومان</b> ارزان‌تر. بیزینس/پرمیوم/فرست هرکدام بازهٔ جدای خودشان را دارند (تب «تنظیمات مارک‌آپ»، قابل ویرایش). ردیف‌هایی که از بازهٔ کلاس خودشان خارج شوند با برچسب «نیاز به بررسی مارک‌آپ» علامت می‌خورند.`;
+}
+
+//: exact definition of each KPI card, shown as a hover tooltip — these are
+// five genuinely different questions, not the same count phrased five ways.
+const KPI_HELP = {
+  anomaly: 'تعداد ردیف‌ها (هر ترکیب تاریخ+کلاس پروازی، برای هر دو جهت مسیر) که با «آماده‌سفر» یا حداقل یکی از رقبای دیگر، خارج از بازهٔ مورد انتظارِ همان کلاس پروازی هستند. این‌ها همان‌هایی هستند که خودتان دستی بررسی می‌کردید.',
+  mismatch: 'تعداد ردیف‌هایی که نرخ مای‌سفر از کمترین قیمت پیدا‌شده در کل بازار (نه فقط آماده‌سفر) بیشتر است — یعنی جایی که واقعاً از ارزان‌ترین گزینهٔ بازار گران‌تریم و ریسک از دست دادن مشتری داریم.',
+  opportunity: 'تعداد ردیف‌هایی که نرخ مای‌سفر از کمترین قیمت بازار پایین‌تر است — یعنی فضای بالا بردن مارک‌آپ داریم بدون از دست دادن رقابتی بودن نسبت به ارزان‌ترین رقیب.',
+  coverage: 'تعداد سایت‌هایی که در آخرین اجرا واقعاً پاسخ موفق دادند، از کل سایت‌های پیکربندی‌شده. این فقط وضعیت فنی اجراست، نه چیزی دربارهٔ قیمت.',
+  ok: 'معکوس «نیاز به بررسی مارک‌آپ»: تعداد ردیف‌هایی که کاملاً در بازهٔ معمول هستند و فعلاً نیازی به دست‌کاری مارک‌آپشان نیست.',
+};
+
+function renderKPIs(){
+  const rows = state.rows.filter(r => state.matchedRoute ? r.route===state.matchedRoute : true);
+  if (!rows.length) { $('kpis').innerHTML=''; return; }
+  const withDir = rows.map(r=>({r,dir:rowDir(r),diff:rowDiff(r)}));
+  const pricier = withDir.filter(x=>x.dir==='up'), cheaper = withDir.filter(x=>x.dir==='down');
+  const anomalies = rows.filter(r=>r.pattern_ok===false);
+  const worstAnomaly = anomalies.reduce((a,b)=>{
+    const bmid = ((b.band_primary_min ?? 0)+(b.band_primary_max ?? 0))/2;
+    const amid = a ? ((a.band_primary_min ?? 0)+(a.band_primary_max ?? 0))/2 : 0;
+    const bd = Math.abs((b.primary_diff_toman ?? 0) - bmid);
+    const ad = a ? Math.abs((a.primary_diff_toman ?? 0) - amid) : -1;
+    return bd>ad ? b : a;
+  }, null);
+  const srcCount = state.sources.length;
+  const availCount = state.job ? Object.values(state.job.per_source).filter(v=>v.status==='ok'||v.status==='running').length : state.enabled.size;
+  $('kpis').innerHTML = `
+    <div class="card kpi highlight"><div class="k" title="${KPI_HELP.anomaly}">نیاز به بررسی مارک‌آپ ⓘ</div><div class="v up">${fmt(anomalies.length)} <span class="sub">از ${fmt(rows.length)} ردیف</span></div><div class="s">${worstAnomaly?('بیشترین انحراف: '+worstAnomaly.date_jalali+' · '+CABIN_FA[worstAnomaly.cabin]):'خارج از الگوی معمول با '+labelFor(primarySourceId())}</div></div>
+    <div class="card kpi"><div class="k" title="${KPI_HELP.mismatch}">گران‌تر از کل بازار ⓘ</div><div class="v up">${fmt(pricier.length)} <span class="sub">از ${fmt(rows.length)} ردیف</span></div><div class="s">از ارزان‌ترین رقیب هم گران‌تریم</div></div>
+    <div class="card kpi"><div class="k" title="${KPI_HELP.opportunity}">فرصت افزایش مارک‌آپ ⓘ</div><div class="v down">${fmt(cheaper.length)} <span class="sub">از ${fmt(rows.length)} ردیف</span></div><div class="s">از کمترین قیمت بازار ارزان‌تریم</div></div>
+    <div class="card kpi"><div class="k" title="${KPI_HELP.coverage}">پوشش منابع (اجرای آخر) ⓘ</div><div class="v">${fmt(availCount)} <span class="sub">از ${fmt(srcCount)} سایت</span></div><div class="s" style="color:var(--warn)">${availCount<srcCount?'برخی منابع خطا دادند':'همه فعال'}</div></div>
+    <div class="card kpi"><div class="k" title="${KPI_HELP.ok}">در الگوی معمول ⓘ</div><div class="v down">${fmt(rows.length-anomalies.length)} <span class="sub">از ${fmt(rows.length)} ردیف</span></div><div class="s">نیازی به تغییر مارک‌آپ ندارند</div></div>`;
+}
+
+function badge(dir){return dir==='up'?'<span class="badge up">▲ ما گران‌تر</span>':dir==='down'?'<span class="badge down">▼ ما ارزان‌تر</span>':dir==='eq'?'<span class="badge eq">= برابر</span>':'<span class="badge warn">⚠ دادهٔ ناقص</span>';}
+function patternBadge(r){
+  const band = `بازهٔ کلاس «${CABIN_FA[r.cabin]||r.cabin}»: با ${labelFor(r.primary_source)} ${fmt(r.band_primary_min)}–${fmt(r.band_primary_max)} ت، با بقیه ${fmt(r.band_other_min)}–${fmt(r.band_other_max)} ت`;
+  if (r.pattern_ok===true) return `<span class="badge ok2" title="${esc(band)}">✓ در الگوی معمول</span>`;
+  if (r.pattern_ok===false) return `<span class="badge warn" title="${esc((r.anomaly_reason||'')+' — '+band)}">⚠ نیاز به بررسی</span>`;
+  return '<span class="sub">داده ناکافی</span>';
+}
+
+function renderRate(){
+  const rows = filteredRows();
+  const active = activeSourceIds().filter(id=>state.enabled.has(id));
+  const primary = primarySourceId();
+  const arrow=k=>state.sort.key===k?(state.sort.dir>0?'▲':'▼'):'';
+  const compHead = active.map(id=>`<th>${id===primary?'⭐ ':''}${labelFor(id)}</th>`).join('');
+  let html = `<thead><tr><th data-sort="date_jalali">تاریخ<span class="ar">${arrow('date_jalali')}</span></th><th>روز</th><th>کلاس</th><th data-sort="mysafar_toman">نرخ مای‌سفر<span class="ar">${arrow('mysafar_toman')}</span></th><th>بررسی الگو</th>${compHead}<th>کمترین رقبا</th><th data-sort="diff">اختلاف<span class="ar">${arrow('diff')}</span></th><th>وضعیت</th></tr></thead><tbody>`;
+  const colCount = 9+active.length;
+  if (!state.jobId) {
+    html += `<tr><td colspan="${colCount}"><div class="empty">هنوز استعلامی اجرا نشده. مبدأ/مقصد و بازهٔ تاریخ را انتخاب و «تحلیل نرخ‌ها» را بزنید.</div></td></tr>`;
+  } else if (!rows.length) {
+    html += `<tr><td colspan="${colCount}"><div class="empty">موردی با این فیلتر یافت نشد.</div></td></tr>`;
+  } else {
+    rows.forEach(r=>{
+      const dir = rowDir(r), diff = rowDiff(r), pct = rowPct(r);
+      const isMin = id => r.market_min_toman!=null && r[id+'_toman']===r.market_min_toman;
+      const comps = active.map(id=>{
+        const v = r[id+'_toman'];
+        const primaryHint = id===primary && r.primary_diff_toman!=null ? `<div class="sub">${r.primary_diff_toman>0?'+':''}${fmt(r.primary_diff_toman)} ت نسبت به ما</div>` : '';
+        return v==null ? `<td class="na">—</td>` : `<td class="price ${isMin(id)?'min':''}" style="${id===primary?'background:#fffbeb':''}">${fmt(v)}${primaryHint}</td>`;
+      }).join('');
+      html += `<tr><td>${r.date_jalali}</td><td>${r.weekday}</td><td>${CABIN_FA[r.cabin]||r.cabin}</td>
+        <td class="price">${fmt(r.mysafar_toman)}${r.mysafar_airline?`<div class="sub">${r.mysafar_airline}</div>`:''}</td>
+        <td>${patternBadge(r)}</td>
+        ${comps}
+        <td class="price">${r.market_min_toman==null?'<span class="na">—</span>':fmt(r.market_min_toman)}</td>
+        <td class="diff ${dir}">${diff==null?'نامشخص':(diff>0?'+':'')+fmt(diff)+`<div class="sub">(${pctFmt(pct)})</div>`}</td>
+        <td>${badge(dir)}</td></tr>`;
+    });
+  }
+  $('rateTbl').innerHTML = html+'</tbody>';
+}
+
+function competitorStats(){
+  const rows = state.rows.filter(r => state.matchedRoute ? r.route===state.matchedRoute : true);
+  return activeSourceIds().map(id=>{
+    let queried=0, cheaper=0, pricier=0, wins=0, idxSum=0, idxN=0;
+    rows.forEach(r=>{
+      const v = r[id+'_toman'];
+      if (v==null) return;
+      queried++;
+      if (r.mysafar_toman!=null) {
+        if (v<r.mysafar_toman) cheaper++; else if (v>r.mysafar_toman) pricier++;
+        idxSum += (v/r.mysafar_toman)*100; idxN++;
+      }
+      if (r.market_min_toman!=null && v===r.market_min_toman) wins++;
+    });
+    const src = state.sources.find(s=>s.id===id);
+    return {
+      id, name: src?src.label:id,
+      queried, cheaper, pricier, wins,
+      winRate: queried? Math.round(wins/queried*100):0,
+      coverage: rows.length? Math.round(queried/rows.length*100):0,
+      idx: idxN? Math.round(idxSum/idxN):null,
+      status: state.job ? (state.job.per_source[id]?.status||'pending') : 'pending',
+    };
+  });
+}
+function renderCompetitors(){
+  const stats = competitorStats();
+  if (!stats.length) { $('cgrid').innerHTML=''; $('compTbl').innerHTML=''; return; }
+  $('cgrid').innerHTML = stats.map(s=>{
+    const tag = s.status==='error' ? '<span class="tag blk">خطا</span>'
+      : s.status==='rate_limited' ? '<span class="tag meta">کندشده</span>'
+      : s.status==='skipped' ? '<span class="tag meta">رد شد (خطاهای پیاپی)</span>'
+      : (s.status==='pending' ? '<span class="tag meta">اجرا نشد</span>' : '<span class="tag">فعال</span>');
+    const c = s.idx==null?'var(--warn)':(s.idx<100?'var(--down)':(s.idx>100?'var(--up)':'var(--eq)'));
+    const w = s.idx==null?0:Math.max(6,Math.min(100,(s.idx-85)/0.3));
+    const t = s.idx==null?'داده ناکافی':(s.idx.toLocaleString('fa-IR')+'٪');
+    const isPrimary = s.id===primarySourceId();
+    return `<div class="ccard" style="${isPrimary?'border-color:var(--accent);background:#fffdf5':''}"><div class="top"><span class="nm">${isPrimary?'⭐ ':''}${s.name}${isPrimary?' <span class="sub">(بنچمارک اصلی)</span>':''}</span>${tag}</div>
+      <div class="metric"><span>پوشش استعلام</span><b>${s.coverage.toLocaleString('fa-IR')}٪</b></div>
+      <div class="metric"><span>ارزان‌تر از ما / گران‌تر</span><b>${s.cheaper.toLocaleString('fa-IR')} / ${s.pricier.toLocaleString('fa-IR')}</b></div>
+      <div class="metric"><span>سهم کمترین قیمت (برد)</span><b>${s.winRate.toLocaleString('fa-IR')}٪</b></div>
+      <div class="idxrow"><span class="lab">شاخص قیمت نسبت به ما</span><div class="bar" style="flex:1"><span style="width:${w}%;background:${c}"></span></div><span class="val" style="color:${c}">${t}</span></div></div>`;
+  }).join('');
+  const statusCell = s => s.status==='error' ? '<span class="st bad">خطا</span>'
+    : s.status==='rate_limited' ? '<span class="st warn2">کندشده</span>'
+    : s.status==='skipped' ? '<span class="st muted">رد شد</span>'
+    : s.status==='pending' ? '<span class="st muted">اجرا نشد</span>'
+    : '<span class="st ok">فعال</span>';
+  $('compTbl').innerHTML = `<thead><tr><th>رقیب</th><th>پوشش</th><th>شاخص قیمت</th><th>سهم کمترین قیمت</th><th>ارزان‌تر از ما</th><th>گران‌تر از ما</th><th>وضعیت</th></tr></thead><tbody>${stats.map(s=>`<tr><td><b>${s.name}</b></td><td>${s.coverage.toLocaleString('fa-IR')}٪</td><td style="color:${s.idx==null?'var(--warn)':(s.idx<100?'var(--down)':'var(--up)')};font-weight:800">${s.idx==null?'—':s.idx.toLocaleString('fa-IR')+'٪'}</td><td>${s.winRate.toLocaleString('fa-IR')}٪</td><td>${s.cheaper.toLocaleString('fa-IR')}</td><td>${s.pricier.toLocaleString('fa-IR')}</td><td>${statusCell(s)}</td></tr>`).join('')}</tbody>`;
+}
+
+function renderCoverage(){
+  const j = state.job;
+  $('covList').innerHTML = state.sources.map(s=>{
+    const sp = j ? j.per_source[s.id] : null;
+    const st = sp ? sp.status : 'pending';
+    const tickCls = st==='ok'?'g':(st==='error'?'r':(st==='rate_limited'?'y':(st==='skipped'?'y':'gray')));
+    const tickTxt = st==='ok'?'✓':(st==='error'?'✗':(st==='rate_limited'?'⏱':(st==='skipped'?'⏭':'…')));
+    const stTxt = {ok:'موفق', error:'خطا', rate_limited:'کندشده (۴۲۹)', skipped:'رد شد (خطاهای پیاپی)', running:'در حال اجرا', pending:'در انتظار'}[st]||st;
+    const stCls = st==='ok'?'ok':(st==='error'?'bad':((st==='rate_limited'||st==='skipped')?'warn2':'muted'));
+    const detail = sp ? `${toFa(sp.done)}/${toFa(sp.total)} درخواست · ${toFa(sp.offers)} پرواز یافت‌شده` : 'بدون اجرا';
+    return `<div class="item"><div class="nm"><span class="tick ${tickCls}">${tickTxt}</span>${s.label}${s.requires_browser?' <span class="sub">(مرورگر)</span>':''}</div><div style="text-align:left"><div class="st ${stCls}">${stTxt}</div><div class="pct">${detail}${sp&&sp.last_error?' · '+esc(sp.last_error).slice(0,60):''}</div></div></div>`;
+  }).join('');
+  $('lastRunV').textContent = j ? (j.created_at||'—') : '—';
+  $('lastElapsedV').textContent = j && j.elapsed_s!=null ? toFa(j.elapsed_s)+' ثانیه' : '—';
+}
+function esc(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function renderChips(){
+  const primary = primarySourceId();
+  const ordered = [...state.sources].sort((a,b)=> (a.id===primary?-1:0) - (b.id===primary?-1:0));
+  $('srcChips').innerHTML = ordered.map(s=>
+    `<span class="chip ${state.enabled.has(s.id)?'':'off'}${s.id===primary?' primary':''}" data-src="${s.id}" title="${s.id===primary?'اولویت اصلی — بنچمارک همیشگی':''}"><span class="dot"></span>${s.id===primary?'<span class="star">⭐</span> ':''}${s.label}${s.requires_browser?' 🖥':''}</span>`
+  ).join('');
+}
+function renderChipsLive(job){
+  document.querySelectorAll('#srcChips .chip').forEach(chip=>{
+    const id = chip.dataset.src;
+    const sp = job.per_source[id];
+    const dot = chip.querySelector('.dot');
+    dot.className = 'dot ' + (sp ? sp.status : 'pending');
+  });
+}
+
+function recompute(){ updateEnv(); renderKPIs(); renderRate(); renderCompetitors(); renderCoverage(); }
+
+function updateEnv(){
+  if (!state.orig || !state.dest) { $('envLabel').textContent=''; return; }
+  const d = state.range;
+  $('envLabel').textContent = `مسیر: ${state.orig.city_fa} (${state.orig.city_code}) ← ${state.dest.city_fa} (${state.dest.city_code}) · ${fmtDate(d.s)} تا ${fmtDate(d.e)}`;
+}
+
+/* ================= Autocomplete — live search against MySafar's own airport
+   database via /api/airports/search, so ANY city they sell is pickable, not
+   just a hand-maintained list. Destination is filtered to international
+   cities (isInternational=true) to match what this project's scrapers
+   actually support end-to-end; origin is unfiltered (Iranian cities). ================= */
+async function searchAirports(q, international){
+  if (!q || q.trim().length < 2) return [];
+  const params = new URLSearchParams({q: q.trim()});
+  if (international !== null) params.set('international', international ? 'true' : 'false');
+  try {
+    const r = await api('/api/airports/search?'+params.toString());
+    return r.matches || [];
+  } catch(e) { return []; }
+}
+async function resolveCityByCode(cityCode, hintQuery){
+  const results = await searchAirports(hintQuery || cityCode, null);
+  return results.find(m=>m.city_code===cityCode) || results[0] || {city_code:cityCode, city_fa:hintQuery||cityCode, english_name:null, mysafar_code:cityCode};
+}
+
+function setupAC(input, pop, target, international){
+  let active=-1, items=[], seq=0;
+  const ctrl=input.closest('.ctrl');
+  function renderList(list, emptyMsg){
+    items=list; active=-1;
+    if(!list.length){ pop.innerHTML=`<div class="ac-empty">${emptyMsg}</div>`; pop.classList.add('show'); return; }
+    pop.innerHTML=list.map((a,i)=>`<div class="ac-item" data-i="${i}"><span class="code">${a.city_code}</span><span class="city">${a.city_fa}</span><span class="apn">${a.country_fa||''}</span></div>`).join('');
+    pop.classList.add('show');
+  }
+  function close(){ pop.classList.remove('show'); active=-1; ctrl.classList.remove('focus'); }
+  async function search(){
+    const q = input.value.trim();
+    if (!q) { renderList([], 'برای جستجو، نام شهر یا کد فرودگاه را تایپ کنید'); return; }
+    if (q.length < 2) { renderList([], 'حداقل ۲ حرف تایپ کنید'); return; }
+    pop.innerHTML = '<div class="ac-empty">در حال جستجو…</div>'; pop.classList.add('show');
+    const mySeq = ++seq;
+    const results = await searchAirports(q, international);
+    if (mySeq !== seq) return; // a newer keystroke already superseded this request
+    renderList(results, 'مقصدی یافت نشد');
+  }
+  let debounceT;
+  function debouncedSearch(){ clearTimeout(debounceT); debounceT=setTimeout(search, 300); }
+  function pick(a){
+    if(!a) return;
+    state[target] = {city_code:a.city_code, city_fa:a.city_fa, english_name:a.english_name, mysafar_code:a.mysafar_code, country_fa:a.country_fa};
+    input.value = a.country_fa ? `${a.city_fa} (${a.country_fa}) — ${a.city_code}` : `${a.city_fa} — ${a.city_code}`;
+    close();
+    resolveRoute(); updateEnv(); tryLoadLastJob();
+  }
+  input.addEventListener('focus',()=>{ctrl.classList.add('focus'); if(input.value.trim().length>=2) search(); });
+  input.addEventListener('input', debouncedSearch);
+  input.addEventListener('keydown',e=>{
+    if(!pop.classList.contains('show'))return;
+    if(e.key==='ArrowDown'){e.preventDefault();active=Math.min(active+1,items.length-1);paint();}
+    else if(e.key==='ArrowUp'){e.preventDefault();active=Math.max(active-1,0);paint();}
+    else if(e.key==='Enter'){e.preventDefault();pick(items[active>=0?active:0]);}
+    else if(e.key==='Escape'){close();}
+  });
+  function paint(){ pop.querySelectorAll('.ac-item').forEach((el,i)=>el.classList.toggle('active',i===active)); }
+  pop.addEventListener('mousedown',e=>{ const it=e.target.closest('.ac-item'); if(it){e.preventDefault();pick(items[+it.dataset.i]);} });
+  input.addEventListener('blur',()=>setTimeout(close,150));
+  return {
+    setInitial: async (a) => {
+      // quick-route chips only carry {city_code, city_fa} — resolve the full
+      // record (English name, mysafar code) from the live search so tktfly
+      // and our own mysafar scraper work exactly like a manually-typed pick.
+      const full = a.english_name!==undefined ? a : await resolveCityByCode(a.city_code, a.city_fa);
+      state[target] = full;
+      input.value = full.country_fa ? `${full.city_fa} (${full.country_fa}) — ${full.city_code}` : `${full.city_fa} — ${full.city_code}`;
+    },
+  };
+}
+
+/* ================= Calendar ================= */
+function renderCal(){
+  const {jy,jm}=state.cal, len=monthLen(jy,jm), first=jWeekday(jy,jm,1);
+  const s=state.range.s, e=state.range.e;
+  const today = todayJalali(), todaySerial = serial(today);
+  let cells='';
+  for(let i=0;i<first;i++) cells+=`<div class="d blank"></div>`;
+  for(let d=1;d<=len;d++){
+    const cur={jy,jm,jd:d}, sc=serial(cur);
+    let cls='d';
+    if (sc < todaySerial) cls += ' past';
+    if(s&&e){ if(sc>serial(s)&&sc<serial(e))cls+=' in'; }
+    if(s&&sc===serial(s))cls+=' edge';
+    if(e&&sc===serial(e))cls+=' edge';
+    cells+=`<div class="${cls}" data-d="${d}">${toFa(d)}</div>`;
+  }
+  const selTxt = (s&&e)?`${fmtDate(s)} – ${fmtDate(e)}`:(s?`${fmtDate(s)} — پایان را انتخاب کنید`:'شروع را انتخاب کنید');
+  $('calPop').innerHTML=`<div class="cal">
+    <div class="cal-h"><button data-nav="-1">‹</button><span class="lbl">${MONTHS[jm-1]} ${toFa(jy)}</span><button data-nav="1">›</button></div>
+    <div class="cal-grid">${WD.map(w=>`<div class="wd">${w}</div>`).join('')}${cells}</div>
+    <div class="cal-f"><span class="seltxt">${selTxt}</span><div><button data-act="clear">پاک کردن</button> <button class="ok" data-act="ok">تأیید</button></div></div>
+  </div>`;
+}
+function openCal(){ state.cal={jy:(state.range.s||todayJalali()).jy,jm:(state.range.s||todayJalali()).jm}; renderCal(); $('calPop').classList.add('show'); $('dateBtn').classList.add('focus'); }
+function closeCal(){ $('calPop').classList.remove('show'); $('dateBtn').classList.remove('focus'); }
+function pickDay(d){
+  const today = todayJalali();
+  const cur={jy:state.cal.jy,jm:state.cal.jm,jd:d};
+  if (serial(cur) < serial(today)) return; // no past dates — nobody can buy yesterday's flight
+  const r=state.range;
+  if(!r.s || (r.s&&r.e)){ r.s=cur; r.e=null; }
+  else { if(serial(cur)>=serial(r.s)) r.e=cur; else { r.e=r.s; r.s=cur; } }
+  renderCal();
+  if(r.s&&r.e){ $('dateVal').textContent=`${fmtDate(r.s)} – ${fmtDate(r.e)}`; updateEnv(); }
+  else $('dateVal').textContent=fmtDate(r.s);
+}
+$('calPop').addEventListener('mousedown',e=>{
+  const nav=e.target.closest('[data-nav]'); const day=e.target.closest('.d[data-d]:not(.past)'); const act=e.target.closest('[data-act]');
+  if(nav){ e.preventDefault(); let {jy,jm}=state.cal; jm+=(+nav.dataset.nav); if(jm<1){jm=12;jy--;} if(jm>12){jm=1;jy++;} state.cal={jy,jm}; renderCal(); }
+  else if(day){ e.preventDefault(); pickDay(+day.dataset.d); }
+  else if(act){ e.preventDefault(); if(act.dataset.act==='clear'){state.range={s:null,e:null};$('dateVal').textContent='—';renderCal();} else closeCal(); }
+});
+
+/* ================= Toast ================= */
+let toastT; function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2400);}
+
+/* ================= Tabs ================= */
+function switchTab(t){ state.tab=t; document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('active',el.dataset.tab===t)); ['rate','comp','cov','settings'].forEach(v=>$('view-'+v).classList.toggle('hidden',v!==t)); }
+
+/* ================= Markup settings panel (per-cabin, live-editable) ================= */
+function renderSettingsForm(){
+  const p = state.meta.expected_pattern;
+  const sel = $('primarySourceSelect');
+  sel.innerHTML = (state.meta.competitor_ids||[]).map(id=>
+    `<option value="${id}" ${id===p.primary_source?'selected':''}>${labelFor(id)}</option>`
+  ).join('');
+
+  const cabinIds = state.meta.cabin_ids || ['economy','premium_economy','business','first'];
+  const rowsHtml = ['default', ...cabinIds].map(cid=>{
+    const band = cid==='default' ? p.default : (p.cabins[cid] || p.default);
+    const label = cid==='default' ? 'پیش‌فرض (هر کلاسی که جدا تنظیم نشده)' : CABIN_FA[cid];
+    return `<tr data-cabin="${cid}">
+      <td>${label}</td>
+      <td><input type="number" step="1000" class="f-pmin" value="${band.primary_diff_toman_min}"></td>
+      <td><input type="number" step="1000" class="f-pmax" value="${band.primary_diff_toman_max}"></td>
+      <td><input type="number" step="10000" class="f-omin" value="${band.other_diff_toman_min}"></td>
+      <td><input type="number" step="10000" class="f-omax" value="${band.other_diff_toman_max}"></td>
+    </tr>`;
+  }).join('');
+
+  $('settingsTbl').innerHTML = `<thead><tr>
+      <th>کلاس پروازی</th>
+      <th>حداقل فاصله با منبع اصلی (ت)</th>
+      <th>حداکثر فاصله با منبع اصلی (ت)</th>
+      <th>حداقل فاصله با سایر رقبا (ت)</th>
+      <th>حداکثر فاصله با سایر رقبا (ت)</th>
+    </tr></thead><tbody>${rowsHtml}</tbody>`;
+}
+
+async function saveSettings(){
+  const primary_source = $('primarySourceSelect').value;
+  const cabins = {};
+  let defaultBand = null;
+  document.querySelectorAll('#settingsTbl tbody tr').forEach(tr=>{
+    const cid = tr.dataset.cabin;
+    const band = {
+      primary_diff_toman_min: parseInt(tr.querySelector('.f-pmin').value, 10) || 0,
+      primary_diff_toman_max: parseInt(tr.querySelector('.f-pmax').value, 10) || 0,
+      other_diff_toman_min: parseInt(tr.querySelector('.f-omin').value, 10) || 0,
+      other_diff_toman_max: parseInt(tr.querySelector('.f-omax').value, 10) || 0,
+    };
+    if (cid==='default') defaultBand = band; else cabins[cid] = band;
+  });
+  try {
+    const updated = await api('/api/pattern-config', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({primary_source, default: defaultBand, cabins}),
+    });
+    state.meta.expected_pattern = updated;
+    $('settingsSavedNote').textContent = 'ذخیره شد ✓ — اگر گزارشی باز است، به‌روزرسانی می‌شود';
+    renderChips(); renderPatternNote(); renderSettingsForm();
+    if (state.jobId) await loadComparison(); // instant re-flag, no re-scrape
+    toast('تنظیمات مارک‌آپ ذخیره شد');
+  } catch(e) { toast('ذخیره نشد: '+e.message); }
+}
+async function resetSettings(){
+  try {
+    const updated = await api('/api/pattern-config/reset', {method:'POST'});
+    state.meta.expected_pattern = updated;
+    $('settingsSavedNote').textContent = 'به پیش‌فرض بازگشت ✓';
+    renderChips(); renderPatternNote(); renderSettingsForm();
+    if (state.jobId) await loadComparison();
+    toast('تنظیمات به پیش‌فرض بازگشت');
+  } catch(e) { toast('بازگشت به پیش‌فرض ناموفق: '+e.message); }
+}
+$('saveSettingsBtn').addEventListener('click', saveSettings);
+$('resetSettingsBtn').addEventListener('click', resetSettings);
+
+/* ================= CSV ================= */
+function exportCSV(){
+  if (!state.jobId) { toast('ابتدا یک تحلیل اجرا کنید'); return; }
+  window.open('/api/csv?job_id='+state.jobId+'&kind=comparison', '_blank');
+}
+
+/* ================= Wire events ================= */
+$('tabs').addEventListener('click',e=>{const t=e.target.closest('.tab');if(t)switchTab(t.dataset.tab);});
+$('srcChips').addEventListener('click',e=>{
+  const c=e.target.closest('.chip[data-src]'); if(!c) return;
+  const id=c.dataset.src;
+  if(state.enabled.has(id)) state.enabled.delete(id); else state.enabled.add(id);
+  renderChips(); renderRate();
+});
+$('rateTbl').addEventListener('click',e=>{const th=e.target.closest('th[data-sort]');if(!th)return;const k=th.dataset.sort;if(state.sort.key===k)state.sort.dir*=-1;else state.sort={key:k,dir:1};renderRate();});
+$('dir').addEventListener('change',renderRate);
+$('cabin').addEventListener('change',()=>{renderRate();});
+$('csvBtn').addEventListener('click',exportCSV);
+$('analyzeBtn').addEventListener('click',runAnalyze);
+$('dateBtn').addEventListener('click',()=>{ $('calPop').classList.contains('show')?closeCal():openCal(); });
+document.addEventListener('click',e=>{ if(!e.target.closest('#dateBtn')&&!e.target.closest('#calPop')) closeCal(); });
+
+const acO=setupAC($('orig'),$('origPop'),'orig',null);
+const acD=setupAC($('dest'),$('destPop'),'dest',true);
+
+boot();
+</script>
+</body>
+</html>

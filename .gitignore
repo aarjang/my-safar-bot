@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+data/history.sqlite
+data/base_fares.csv
+data/pattern_overrides.json
+data/.dashboard_credentials.json
+reports/*.csv
+reports/*.xlsx
+.DS_Store
+.env
+*.env
+!.env.example
+.claude/
