@@ -62,6 +62,11 @@
   .ac-item .city{font-weight:600}.ac-item .apn{color:var(--muted);font-size:11.5px;margin-inline-start:auto}
   .ac-empty{padding:12px;color:var(--muted);text-align:center;font-size:12.5px}
   /* calendar */
+  /* .pop is stretched to its narrow parent field (right:0;left:0) and clips
+     overflow — fine for the autocomplete dropdown, but the calendar is wider
+     than the date field itself, so it needs its own unclipped, fixed-width
+     popover instead of inheriting the generic .pop sizing. */
+  #calPop{left:auto;right:0;width:320px;overflow:visible}
   .cal{width:300px;padding:12px}
   .cal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
   .cal-h button{border:none;background:#f1f5ff;color:var(--brand);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:16px;font-family:inherit}
@@ -606,7 +611,11 @@ function renderPatternNote(){
   if (!p) { $('patternNote').textContent=''; return; }
   const primaryLabel = labelFor(p.primary_source);
   const d = p.default;
-  $('patternNote').innerHTML = `<b>الگوی مورد انتظار (طبق روال فعلی شما):</b> اولویت اصلی مقایسه با <b>${primaryLabel}</b> است — برای اکونومی، نرخ مای‌سفر معمولاً باید <b>${fmt(d.primary_diff_toman_min)} تا ${fmt(d.primary_diff_toman_max)} تومان</b> پایین‌تر از آن باشد، و از سایر رقبا <b>${fmt(d.other_diff_toman_min)} تا ${fmt(d.other_diff_toman_max)} تومان</b> ارزان‌تر. بیزینس/پرمیوم/فرست هرکدام بازهٔ جدای خودشان را دارند (تب «تنظیمات مارک‌آپ»، قابل ویرایش). ردیف‌هایی که از بازهٔ کلاس خودشان خارج شوند با برچسب «نیاز به بررسی مارک‌آپ» علامت می‌خورند.`;
+  const reg = state.meta?.regulated_airlines;
+  const regNote = (reg && reg.enabled && reg.names_fa && reg.names_fa.length)
+    ? ` پروازهای <b>${reg.names_fa.join('، ')}</b> از این مقایسه مستثنی‌اند — نرخ این ایرلاین‌ها طبق بخشنامهٔ خودشان مصوب است و اختلاف رقبا در موردشان به مارک‌آپ ما ربطی ندارد.`
+    : '';
+  $('patternNote').innerHTML = `<b>الگوی مورد انتظار (طبق روال فعلی شما):</b> اولویت اصلی مقایسه با <b>${primaryLabel}</b> است — برای اکونومی، نرخ مای‌سفر معمولاً باید <b>${fmt(d.primary_diff_toman_min)} تا ${fmt(d.primary_diff_toman_max)} تومان</b> پایین‌تر از آن باشد، و از سایر رقبا <b>${fmt(d.other_diff_toman_min)} تا ${fmt(d.other_diff_toman_max)} تومان</b> ارزان‌تر. بیزینس/پرمیوم/فرست هرکدام بازهٔ جدای خودشان را دارند (تب «تنظیمات مارک‌آپ»، قابل ویرایش). ردیف‌هایی که از بازهٔ کلاس خودشان خارج شوند با برچسب «نیاز به بررسی مارک‌آپ» علامت می‌خورند.${regNote}`;
 }
 
 //: exact definition of each KPI card, shown as a hover tooltip — these are
@@ -647,7 +656,11 @@ function patternBadge(r){
   const band = `بازهٔ کلاس «${CABIN_FA[r.cabin]||r.cabin}»: با ${labelFor(r.primary_source)} ${fmt(r.band_primary_min)}–${fmt(r.band_primary_max)} ت، با بقیه ${fmt(r.band_other_min)}–${fmt(r.band_other_max)} ت`;
   if (r.pattern_ok===true) return `<span class="badge ok2" title="${esc(band)}">✓ در الگوی معمول</span>`;
   if (r.pattern_ok===false) return `<span class="badge warn" title="${esc((r.anomaly_reason||'')+' — '+band)}">⚠ نیاز به بررسی</span>`;
-  return '<span class="sub">داده ناکافی</span>';
+  // pattern_ok is null for one of two reasons — say which, instead of a vague catch-all:
+  const why = r.mysafar_toman==null
+    ? 'نرخ مای‌سفر برای این تاریخ/کلاس پیدا نشد'
+    : 'هیچ رقیبی برای این تاریخ/کلاس نرخی نداشت که با آن مقایسه شود';
+  return `<span class="sub" title="${esc(why)}">— داده ناکافی</span>`;
 }
 
 function renderRate(){

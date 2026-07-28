@@ -6,13 +6,13 @@ services:
     restart: unless-stopped
     ports:
       - "${HOST_PORT:-8765}:8765"
-    environment:
-      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
-      # bcrypt hash, not the plaintext password — see .env.example for how to
-      # generate one. If unset, the app falls back to auto-generating a local
-      # credentials file and printing the password once to the container logs.
-      DASHBOARD_PASSWORD_HASH: ${DASHBOARD_PASSWORD_HASH:-}
-      DASHBOARD_CORS_ORIGINS: ${DASHBOARD_CORS_ORIGINS:-}
+    # env_file (not `environment: ${VAR}`) on purpose: docker-compose's own
+    # ${VAR} interpolation re-parses substituted values for $-syntax, which
+    # mangles a bcrypt hash (its $2b$12$... delimiters look like more
+    # variable references to compose). env_file loads .env's KEY=VALUE lines
+    # into the container as-is, with no second interpolation pass.
+    env_file:
+      - .env
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports

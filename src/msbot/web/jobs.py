@@ -255,6 +255,7 @@ class JobManager:
         return comparison_frame(
             [o for r in results_snapshot for o in r.offers],
             job.base_strategy, job.base_table, pattern_cfg=pattern_cfg,
+            regulated_cfg=job.cfg.get("regulated_airlines"),
         )
 
 

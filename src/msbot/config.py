@@ -55,6 +55,15 @@ DEFAULTS: Dict[str, Any] = {
     # the agency's own described workflow: tktfly is the primary benchmark,
     # we expect to sit ~10k Toman below it and 100-200k below everyone else.
     # See src/msbot/pattern.py for the full rationale.
+    # Airlines whose selling price is fixed by the airline's own circular
+    # (نرخ مصوب), not agency markup — see src/msbot/regulated.py. Offers from
+    # these are excluded from the comparison/markup table (kept in the raw
+    # offer dump) so a competitor quietly discounting below the mandated
+    # floor doesn't produce a false "lower your price" flag.
+    "regulated_airlines": {
+        "enabled": True,
+        "aliases": None,  # null = use the defaults baked into regulated.py
+    },
     "expected_pattern": {
         "primary_source": "tktfly",
         "primary_diff_toman_min": 5000,

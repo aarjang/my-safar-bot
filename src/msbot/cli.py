@@ -93,13 +93,14 @@ def cmd_scrape(args: argparse.Namespace) -> int:
             base_table = BaseFareTable.from_csv(base_file)
 
     pattern_cfg = PatternConfig.from_cfg(cfg.get("expected_pattern"))
+    regulated_cfg = cfg.get("regulated_airlines")
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    paths = write_reports(offers, cfg["reports"]["dir"], stamp, base_strategy, base_table, pattern_cfg)
+    paths = write_reports(offers, cfg["reports"]["dir"], stamp, base_strategy, base_table, pattern_cfg, regulated_cfg)
     for name, path in paths.items():
         log.info("report %-15s %s", name, path)
 
-    comp = comparison_frame(offers, base_strategy, base_table, pattern_cfg=pattern_cfg)
+    comp = comparison_frame(offers, base_strategy, base_table, pattern_cfg=pattern_cfg, regulated_cfg=regulated_cfg)
     if not comp.empty:
         cols = [c for c in comp.columns if c.endswith("_toman") or c in ("route", "date", "cabin")]
         print()
@@ -107,10 +108,11 @@ def cmd_scrape(args: argparse.Namespace) -> int:
 
         anomalies = comp[comp["pattern_ok"] == False]  # noqa: E712 (pandas nullable bool)
         if not anomalies.empty:
+            eco = pattern_cfg.for_cabin("economy")
             print()
-            print("{} flight(s) fall outside the usual pattern (tktfly ~{:,}-{:,}T, others ~{:,}-{:,}T below us) — likely need a markup look:".format(
-                len(anomalies), pattern_cfg.primary_min, pattern_cfg.primary_max,
-                pattern_cfg.other_min, pattern_cfg.other_max,
+            print("{} flight(s) fall outside the usual pattern for their cabin ({} ~{:,}-{:,}T, others ~{:,}-{:,}T below us, for economy) — likely need a markup look:".format(
+                len(anomalies), pattern_cfg.primary_source, eco.primary_min, eco.primary_max,
+                eco.other_min, eco.other_max,
             ))
             print(anomalies[["route", "date", "cabin", "mysafar_toman", "primary_diff_toman", "anomaly_reason"]].to_string(index=False))
 

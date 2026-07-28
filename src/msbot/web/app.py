@@ -35,6 +35,7 @@ from ..config import load_config, route_specs
 from ..http import Fetcher
 from ..markup import BaseFareTable
 from ..pattern import CABIN_IDS, PatternConfig, PatternSettingsStore
+from .. import regulated as regulatedmod
 from ..report import comparison_frame, offers_frame
 from ..scrapers.base import get_scraper_classes
 from ..storage import Storage
@@ -90,6 +91,15 @@ _pattern_store = PatternSettingsStore(
 # a separate, gentler-limited fetcher for autocomplete — small, frequent
 # lookups, distinct from the scrape fetcher's per-host 429 backoff tuning.
 _airport_fetcher = Fetcher(min_interval=0.3, jitter=0.2, timeout=15, retries=2)
+
+#: display labels for /api/meta — keyed the same as regulated.DEFAULT_REGULATED_ALIASES
+REGULATED_LABELS_FA = {
+    "mahan": "ماهان",
+    "saha": "ساها",
+    "caspian": "کاسپین",
+    "iran_airtour": "ایران ایرتور",
+    "sepehran": "سپهران",
+}
 
 
 def _current_pattern_cfg() -> PatternConfig:
@@ -169,6 +179,10 @@ def meta() -> Dict[str, Any]:
             "per_host": _cfg["rate_limit"].get("per_host", {}),
         },
         "expected_pattern": _current_pattern_cfg().to_dict(),
+        "regulated_airlines": {
+            "enabled": bool((_cfg.get("regulated_airlines") or {}).get("enabled", True)),
+            "names_fa": [REGULATED_LABELS_FA[k] for k in regulatedmod.DEFAULT_REGULATED_ALIASES],
+        },
         "default_start": (today + timedelta(days=1)).isoformat(),
         "default_days": min(_cfg.get("days", 14), 14),
     }
@@ -275,7 +289,10 @@ def get_csv(job_id: str, kind: str = Query("comparison", pattern="^(comparison|o
         raise HTTPException(status_code=404, detail="job not found")
     offers = [o for r in job.results for o in r.offers]
     if kind == "comparison":
-        df = comparison_frame(offers, job.base_strategy, job.base_table, pattern_cfg=_current_pattern_cfg())
+        df = comparison_frame(
+            offers, job.base_strategy, job.base_table, pattern_cfg=_current_pattern_cfg(),
+            regulated_cfg=job.cfg.get("regulated_airlines"),
+        )
     else:
         df = offers_frame(offers)
     buf = io.StringIO()

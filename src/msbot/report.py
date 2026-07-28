@@ -11,6 +11,7 @@ from .markup import BaseFareTable, markup_percent, resolve_base_fare
 from .models import FlightOffer
 from .pattern import PatternConfig
 from . import pattern as patternmod
+from . import regulated as regulatedmod
 
 OUR_SOURCE = "mysafar"
 
@@ -29,8 +30,18 @@ def comparison_frame(
     base_table: Optional[BaseFareTable] = None,
     cabins: Optional[List[str]] = None,
     pattern_cfg: Optional[PatternConfig] = None,
+    regulated_cfg: Optional[Dict[str, object]] = None,
 ) -> pd.DataFrame:
-    """One row per (route, date, cabin): our price vs each competitor + markup."""
+    """One row per (route, date, cabin): our price vs each competitor + markup.
+
+    Offers for airline-regulated-fare carriers (Mahan/Saha/Caspian/Iran
+    Airtour/Sepehran by default — see ``msbot.regulated``) are dropped before
+    any of this: their price is set by the airline's own circular, not agency
+    markup, so a competitor showing a lower number there isn't a pricing
+    signal — including them would produce false "lower your price" flags.
+    They still appear in ``offers_frame``/the raw CSV, just not here.
+    """
+    offers, _regulated_offers = regulatedmod.split_regulated(offers, regulated_cfg)
     if not offers:
         return pd.DataFrame()
 
@@ -115,10 +126,11 @@ def write_reports(
     base_strategy: str = "mysafar",
     base_table: Optional[BaseFareTable] = None,
     pattern_cfg: Optional[PatternConfig] = None,
+    regulated_cfg: Optional[Dict[str, object]] = None,
 ) -> Dict[str, str]:
     Path(outdir).mkdir(parents=True, exist_ok=True)
     raw = offers_frame(offers)
-    comp = comparison_frame(offers, base_strategy, base_table, pattern_cfg=pattern_cfg)
+    comp = comparison_frame(offers, base_strategy, base_table, pattern_cfg=pattern_cfg, regulated_cfg=regulated_cfg)
 
     paths: Dict[str, str] = {}
     raw_csv = str(Path(outdir) / "offers_{}.csv".format(stamp))
