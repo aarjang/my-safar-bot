@@ -114,6 +114,9 @@
   #rateTbl{font-size:11.5px}
   #rateTbl td,#rateTbl th{padding:7px 6px}
   thead th{background:#f8fafc;color:var(--muted);font-weight:700;font-size:12px;padding:10px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:5}
+  thead th .th-filter{margin-top:4px;font-size:10.5px;font-weight:500;padding:3px 4px;max-width:100%;border-color:#e5e7eb;background:#fff;cursor:pointer}
+  thead th[data-sort]:has(.th-filter){cursor:default}
+  thead th[data-sort]:has(.th-filter):hover{color:var(--muted)}
   thead th[data-sort]{cursor:pointer;user-select:none}
   thead th[data-sort]:hover{color:var(--brand)}
   thead th .ar{font-size:10px;opacity:.7;margin-inline-start:3px}
@@ -238,21 +241,7 @@
 
   <div id="view-rate" class="card">
     <div class="toolbar">
-      <select id="cabin">
-        <option value="all">همهٔ کلاس‌ها</option>
-        <option value="economy">اکونومی</option>
-        <option value="premium_economy">پرمیوم اکونومی</option>
-        <option value="business">بیزینس</option>
-      </select>
-      <select id="dir">
-        <option value="all">همهٔ وضعیت‌ها</option>
-        <option value="anomaly">فقط: نیاز به بررسی مارک‌آپ</option>
-        <option value="pattern_ok">فقط: در الگوی معمول</option>
-        <option value="up">فقط: ما گران‌تر از رقبا</option>
-        <option value="down">فقط: ما ارزان‌تر از رقبا</option>
-        <option value="eq">فقط: برابر</option>
-        <option value="na">فقط: دادهٔ ناقص</option>
-      </select>
+      <span class="sub">فیلتر کلاس و وضعیت الان روی سطر اول خود جدول است — روی هر ستون هم بزنید تا مرتب شود.</span>
       <span class="grow"></span>
       <button class="btn ghost" id="csvBtn">⬇ خروجی CSV</button>
     </div>
@@ -384,6 +373,7 @@ const state = {
   range: {s:null, e:null},
   enabled: new Set(),
   sort: {key:'date_jalali', dir:1}, tab: 'rate',
+  filters: {cabin:'all', dir:'all'}, // read/written via the selects embedded in the table header itself
   cal: null,
   jobId: null, job: null, pollTimer: null,
   rows: [],            // comparison rows from backend
@@ -600,8 +590,10 @@ function rowDir(row){
 }
 function rowDiff(row){ if(row.mysafar_toman==null||row.market_min_toman==null) return null; return row.mysafar_toman-row.market_min_toman; }
 function rowPct(row){ const d=rowDiff(row); if(d==null||!row.market_min_toman) return null; return d/row.market_min_toman*100; }
+const DIR_ORDER = {up:0, down:1, eq:2, na:3};
+function patternOrder(v){ return v===false?0 : (v==null?1:2); } // anomalies sort first ascending
 function filteredRows(){
-  const dirF=$('dir').value, cabinF=$('cabin').value;
+  const {cabin:cabinF, dir:dirF} = state.filters;
   let rows = state.rows.filter(r => state.matchedRoute ? r.route===state.matchedRoute : true);
   if (cabinF!=='all') rows = rows.filter(r=>r.cabin===cabinF);
   if (dirF==='anomaly') rows = rows.filter(r=>r.pattern_ok===false);
@@ -609,9 +601,15 @@ function filteredRows(){
   else if (dirF!=='all') rows = rows.filter(r=>rowDir(r)===dirF);
   const {key,dir}=state.sort;
   rows = rows.slice().sort((x,y)=>{
+    // string-valued columns get a real string comparison, not numeric subtraction
     if(key==='date_jalali') return x.date<y.date ? -dir : x.date>y.date ? dir : 0;
-    const av = key==='mysafar_toman'?x.mysafar_toman: (key==='diff'?rowDiff(x):x[key]);
-    const bv = key==='mysafar_toman'?y.mysafar_toman: (key==='diff'?rowDiff(y):y[key]);
+    if(key==='cabin'){ const a=CABIN_FA[x.cabin]||x.cabin||'', b=CABIN_FA[y.cabin]||y.cabin||''; return a<b?-dir:a>b?dir:0; }
+    // everything else reduces to a comparable number
+    let av, bv;
+    if (key==='diff') { av=rowDiff(x); bv=rowDiff(y); }
+    else if (key==='dir') { av=DIR_ORDER[rowDir(x)]; bv=DIR_ORDER[rowDir(y)]; }
+    else if (key==='pattern_ok') { av=patternOrder(x.pattern_ok); bv=patternOrder(y.pattern_ok); }
+    else { av=x[key]; bv=y[key]; }
     const a = av==null?-1e18:av, b = bv==null?-1e18:bv;
     return (a-b)*dir;
   });
@@ -680,8 +678,33 @@ function renderRate(){
   const active = activeSourceIds().filter(id=>state.enabled.has(id));
   const primary = primarySourceId();
   const arrow=k=>state.sort.key===k?(state.sort.dir>0?'▲':'▼'):'';
-  const compHead = active.map(id=>`<th>${id===primary?'⭐ ':''}${labelFor(id)}</th>`).join('');
-  let html = `<thead><tr><th data-sort="date_jalali">تاریخ<span class="ar">${arrow('date_jalali')}</span></th><th>روز</th><th>کلاس</th><th data-sort="mysafar_toman">نرخ مای‌سفر<span class="ar">${arrow('mysafar_toman')}</span></th><th>بررسی الگو</th>${compHead}<th>کمترین رقبا</th><th data-sort="diff">اختلاف<span class="ar">${arrow('diff')}</span></th><th>وضعیت</th></tr></thead><tbody>`;
+  const compHead = active.map(id=>`<th data-sort="${id}_toman">${id===primary?'⭐ ':''}${labelFor(id)}<span class="ar">${arrow(id+'_toman')}</span></th>`).join('');
+  const cabinFilter = `<select id="cabin" class="th-filter" onclick="event.stopPropagation()">
+      <option value="all"${state.filters.cabin==='all'?' selected':''}>همهٔ کلاس‌ها</option>
+      <option value="economy"${state.filters.cabin==='economy'?' selected':''}>اکونومی</option>
+      <option value="premium_economy"${state.filters.cabin==='premium_economy'?' selected':''}>پرمیوم اکونومی</option>
+      <option value="business"${state.filters.cabin==='business'?' selected':''}>بیزینس</option>
+    </select>`;
+  const dirFilter = `<select id="dir" class="th-filter" onclick="event.stopPropagation()">
+      <option value="all"${state.filters.dir==='all'?' selected':''}>همه</option>
+      <option value="anomaly"${state.filters.dir==='anomaly'?' selected':''}>نیاز به بررسی</option>
+      <option value="pattern_ok"${state.filters.dir==='pattern_ok'?' selected':''}>در الگوی معمول</option>
+      <option value="up"${state.filters.dir==='up'?' selected':''}>ما گران‌تر</option>
+      <option value="down"${state.filters.dir==='down'?' selected':''}>ما ارزان‌تر</option>
+      <option value="eq"${state.filters.dir==='eq'?' selected':''}>برابر</option>
+      <option value="na"${state.filters.dir==='na'?' selected':''}>دادهٔ ناقص</option>
+    </select>`;
+  let html = `<thead><tr>
+    <th data-sort="date_jalali">تاریخ<span class="ar">${arrow('date_jalali')}</span></th>
+    <th>روز</th>
+    <th data-sort="cabin">کلاس<span class="ar">${arrow('cabin')}</span><br>${cabinFilter}</th>
+    <th data-sort="mysafar_toman">نرخ مای‌سفر<span class="ar">${arrow('mysafar_toman')}</span></th>
+    <th data-sort="pattern_ok">بررسی الگو<span class="ar">${arrow('pattern_ok')}</span></th>
+    ${compHead}
+    <th data-sort="market_min_toman">کمترین رقبا<span class="ar">${arrow('market_min_toman')}</span></th>
+    <th data-sort="diff">اختلاف<span class="ar">${arrow('diff')}</span></th>
+    <th data-sort="dir">وضعیت<span class="ar">${arrow('dir')}</span><br>${dirFilter}</th>
+  </tr></thead><tbody>`;
   const colCount = 9+active.length;
   if (!state.jobId) {
     html += `<tr><td colspan="${colCount}"><div class="empty">هنوز استعلامی اجرا نشده. مبدأ/مقصد و بازهٔ تاریخ را انتخاب و «تحلیل نرخ‌ها» را بزنید.</div></td></tr>`;
@@ -1011,9 +1034,20 @@ $('srcChips').addEventListener('click',e=>{
   if(state.enabled.has(id)) state.enabled.delete(id); else state.enabled.add(id);
   renderChips(); renderRate();
 });
-$('rateTbl').addEventListener('click',e=>{const th=e.target.closest('th[data-sort]');if(!th)return;const k=th.dataset.sort;if(state.sort.key===k)state.sort.dir*=-1;else state.sort={key:k,dir:1};renderRate();});
-$('dir').addEventListener('change',renderRate);
-$('cabin').addEventListener('change',()=>{renderRate();});
+$('rateTbl').addEventListener('click',e=>{
+  if (e.target.closest('select')) return; // the header-embedded filters handle their own clicks
+  const th=e.target.closest('th[data-sort]'); if(!th) return;
+  const k=th.dataset.sort;
+  if(state.sort.key===k) state.sort.dir*=-1; else state.sort={key:k,dir:1};
+  renderRate();
+});
+// #cabin/#dir live inside the table header and get recreated on every
+// renderRate() call, so their listeners must be delegated from a stable
+// parent rather than attached to the (disposable) elements directly.
+$('rateTbl').addEventListener('change',e=>{
+  if (e.target.id==='cabin') { state.filters.cabin = e.target.value; renderRate(); }
+  else if (e.target.id==='dir') { state.filters.dir = e.target.value; renderRate(); }
+});
 $('csvBtn').addEventListener('click',exportCSV);
 $('analyzeBtn').addEventListener('click',runAnalyze);
 $('dateBtn').addEventListener('click',()=>{ $('calPop').classList.contains('show')?closeCal():openCal(); });
