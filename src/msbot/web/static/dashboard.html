@@ -12,6 +12,7 @@
     --radius:16px;--shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.05);
   }
   *{box-sizing:border-box}
+  html,body{overflow-x:hidden}
   body{margin:0;font-family:'Vazirmatn','Noto Sans Arabic',Tahoma,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.7;font-size:14px}
   .ribbon{background:#0b1020;color:#cbd5e1;text-align:center;font-size:12.5px;padding:7px 12px}
   .ribbon b{color:#fff}
@@ -100,9 +101,19 @@
   input[type=search]{cursor:text;min-width:210px}
   .sec-h{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--line)}
   .sec-h h2{margin:0;font-size:16px;font-weight:800}
-  .tblwrap{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:820px}
-  thead th{background:#f8fafc;color:var(--muted);font-weight:700;font-size:12px;padding:10px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  /* overflow-x:auto alone forces an implicit overflow-y:auto too (per the
+     CSS overflow spec, a non-visible axis paired with visible forces the
+     other to auto as well) — which makes .tblwrap, not the page, the sticky
+     containing block, so `position:sticky` on thead th would silently stop
+     sticking to the viewport. Embracing that and giving it a bounded height
+     turns it into the intended behavior: a frozen header over a scrollable
+     grid, contained in one place — nothing needs to be sorted out about the
+     rest of the page scrolling oddly around it. */
+  .tblwrap{overflow:auto;max-width:100%;max-height:560px}
+  table{width:100%;border-collapse:collapse;font-size:12px;table-layout:auto}
+  #rateTbl{font-size:11.5px}
+  #rateTbl td,#rateTbl th{padding:7px 6px}
+  thead th{background:#f8fafc;color:var(--muted);font-weight:700;font-size:12px;padding:10px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:5}
   thead th[data-sort]{cursor:pointer;user-select:none}
   thead th[data-sort]:hover{color:var(--brand)}
   thead th .ar{font-size:10px;opacity:.7;margin-inline-start:3px}
@@ -652,11 +663,11 @@ function renderKPIs(){
     <div class="card kpi"><div class="k" title="${KPI_HELP.ok}">در الگوی معمول ⓘ</div><div class="v down">${fmt(rows.length-anomalies.length)} <span class="sub">از ${fmt(rows.length)} ردیف</span></div><div class="s">نیازی به تغییر مارک‌آپ ندارند</div></div>`;
 }
 
-function badge(dir){return dir==='up'?'<span class="badge up">▲ ما گران‌تر</span>':dir==='down'?'<span class="badge down">▼ ما ارزان‌تر</span>':dir==='eq'?'<span class="badge eq">= برابر</span>':'<span class="badge warn">⚠ دادهٔ ناقص</span>';}
+function badge(dir){return dir==='up'?'<span class="badge up" title="ما گران‌تر از کمترین قیمت بازار">▲ گران‌تر</span>':dir==='down'?'<span class="badge down" title="ما ارزان‌تر از کمترین قیمت بازار">▼ ارزان‌تر</span>':dir==='eq'?'<span class="badge eq">= برابر</span>':'<span class="badge warn" title="دادهٔ ناقص">⚠</span>';}
 function patternBadge(r){
   const band = `بازهٔ کلاس «${CABIN_FA[r.cabin]||r.cabin}»: با ${labelFor(r.primary_source)} ${fmt(r.band_primary_min)}–${fmt(r.band_primary_max)} ت، با بقیه ${fmt(r.band_other_min)}–${fmt(r.band_other_max)} ت`;
-  if (r.pattern_ok===true) return `<span class="badge ok2" title="${esc(band)}">✓ در الگوی معمول</span>`;
-  if (r.pattern_ok===false) return `<span class="badge warn" title="${esc((r.anomaly_reason||'')+' — '+band)}">⚠ نیاز به بررسی</span>`;
+  if (r.pattern_ok===true) return `<span class="badge ok2" title="${esc(band)}">✓ عادی</span>`;
+  if (r.pattern_ok===false) return `<span class="badge warn" title="${esc((r.anomaly_reason||'')+' — '+band)}">⚠ بررسی</span>`;
   // pattern_ok is null for one of two reasons — say which, instead of a vague catch-all:
   const why = r.mysafar_toman==null
     ? 'نرخ مای‌سفر برای این تاریخ/کلاس پیدا نشد'
@@ -682,15 +693,16 @@ function renderRate(){
       const isMin = id => r.market_min_toman!=null && r[id+'_toman']===r.market_min_toman;
       const comps = active.map(id=>{
         const v = r[id+'_toman'];
-        const primaryHint = id===primary && r.primary_diff_toman!=null ? `<div class="sub">${r.primary_diff_toman>0?'+':''}${fmt(r.primary_diff_toman)} ت نسبت به ما</div>` : '';
-        return v==null ? `<td class="na">—</td>` : `<td class="price ${isMin(id)?'min':''}" style="${id===primary?'background:#fffbeb':''}">${fmt(v)}${primaryHint}</td>`;
+        const primaryTitle = id===primary && r.primary_diff_toman!=null
+          ? ` title="${(r.primary_diff_toman>0?'+':'')}${fmt(r.primary_diff_toman)} ت نسبت به ما"` : '';
+        return v==null ? `<td class="na">—</td>` : `<td class="price ${isMin(id)?'min':''}"${primaryTitle} style="${id===primary?'background:#fffbeb':''}">${fmt(v)}</td>`;
       }).join('');
       html += `<tr><td>${r.date_jalali}</td><td>${r.weekday}</td><td>${CABIN_FA[r.cabin]||r.cabin}</td>
-        <td class="price">${fmt(r.mysafar_toman)}${r.mysafar_airline?`<div class="sub">${r.mysafar_airline}</div>`:''}</td>
+        <td class="price"${r.mysafar_airline?` title="${esc(r.mysafar_airline)}"`:''}>${fmt(r.mysafar_toman)}</td>
         <td>${patternBadge(r)}</td>
         ${comps}
         <td class="price">${r.market_min_toman==null?'<span class="na">—</span>':fmt(r.market_min_toman)}</td>
-        <td class="diff ${dir}">${diff==null?'نامشخص':(diff>0?'+':'')+fmt(diff)+`<div class="sub">(${pctFmt(pct)})</div>`}</td>
+        <td class="diff ${dir}"${pct!=null?` title="${pctFmt(pct)}"`:''}>${diff==null?'نامشخص':(diff>0?'+':'')+fmt(diff)}</td>
         <td>${badge(dir)}</td></tr>`;
     });
   }
