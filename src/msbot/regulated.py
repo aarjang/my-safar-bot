@@ -26,6 +26,21 @@ trying to special-case "only ignore it when the competitor is the one
 undercutting." They still show up in the raw offer dump (`offers_frame`/
 `offers_<ts>.csv`) for the record; they just don't participate in the
 markup-comparison math, since that price isn't a markup decision at all.
+
+**System fares only, not charter.** Follow-up from the client:
+
+    پروازهای سیستمی ساها، کاسپین، ماهان با اینکه ما قیمتمون بالاتر هست،
+    تو لیست نرخ گران‌تر نباشه
+
+The airline circular fixes the price of these carriers' *system* (published/
+GDS) tickets specifically — it says nothing about charter capacity they sell
+on the side, which is priced the normal negotiated way and *is* a fair
+markup comparison. So the exclusion only applies when ``is_charter`` is not
+``True`` (covers both confirmed-system offers and sources that don't report
+charter/system at all, e.g. mrbilit — safer to under-compare a possible
+charter fare than to keep producing the false "we're too expensive" flag
+this rule exists to fix). A confirmed charter offer from Mahan/Saha/Caspian
+is treated like any other competitor offer.
 """
 from __future__ import annotations
 
@@ -72,6 +87,8 @@ def resolve_aliases(cfg: Optional[Dict[str, Any]]) -> List[str]:
 
 
 def is_regulated(offer: FlightOffer, aliases: Iterable[str]) -> bool:
+    if offer.is_charter is True:
+        return False  # confirmed charter — the airline circular doesn't cover this fare
     name = _normalize(offer.airline_name)
     code = _normalize(offer.airline_code)
     for alias in aliases:
