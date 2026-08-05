@@ -6,8 +6,10 @@
 # suddenly has to re-run apt and pip against this server's connection, which
 # times out mid-download and fails the build. Pinning keeps rebuilds limited
 # to the layers we actually changed. Bump this digest deliberately, on its
-# own, when you want a newer base.
-FROM python:3.11-slim@sha256:3c35dbe0205e9428cdd671c078cc6c824fc20c86591646eb91c0cdc6c86fb8bd
+# own, when you want a newer base — and expect that build to re-run apt and
+# pip in full, which on this connection is a ~1h job that needs watching, not
+# something to slip into a routine deploy.
+FROM python:3.11-slim@sha256:db3ff2e1800a8581e2c48a27c3995339d47bdf046da21c7627accd3d51053a93
 
 WORKDIR /app
 
