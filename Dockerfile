@@ -1,4 +1,8 @@
-# All 6 scrapers, including mrbilit (needs a real browser).
+# All 6 scrapers, including mrbilit (needs a real browser). Chromium comes
+# from Debian's own apt package, NOT `playwright install chromium` — that
+# command pulls from Playwright's own CDN (cdn.playwright.dev), which
+# geo-blocks Iranian IPs with an HTTP 403. apt's chromium has no such
+# restriction and pulls in the right shared-lib dependencies automatically.
 #
 # Pinned by digest, not by the floating `3.11-slim` tag. When that tag moves
 # upstream (it did on 2026-08-05, to a trixie base), every layer below it is
@@ -13,23 +17,15 @@ FROM python:3.11-slim@sha256:db3ff2e1800a8581e2c48a27c3995339d47bdf046da21c7627a
 
 WORKDIR /app
 
-# This server's link to deb.debian.org and PyPI drops partway through large
-# downloads (the 9.6MB package index is the usual casualty). apt's default is
-# to give up almost immediately; these make it keep trying instead of failing
-# the whole build.
-RUN printf '%s\n' \
-        'Acquire::Retries "15";' \
-        'Acquire::http::Timeout "120";' \
-        'Acquire::https::Timeout "120";' \
-        'Acquire::http::No-Cache "true";' \
-    > /etc/apt/apt.conf.d/99-retries
-
+# Nothing may be inserted between FROM and this RUN, and its text must stay
+# byte-identical: Docker keys a layer's cache on the parent image plus the
+# exact command string, so even adding an apt.conf tweak above it forces the
+# whole ~1h apt+pip rebuild on this connection. Tune apt inside this same
+# RUN if it ever needs it, accepting that doing so rebuilds the layer once.
+#
 # lxml (tktfly's HTML parser) needs these at build time on slim images without
-# a prebuilt wheel for the target arch. chromium is mrbilit's browser, and it
-# comes from Debian's own apt package rather than `playwright install
-# chromium` — that command pulls from Playwright's CDN (cdn.playwright.dev),
-# which geo-blocks Iranian IPs with an HTTP 403. apt's chromium has no such
-# restriction and pulls in the right shared libs automatically.
+# a prebuilt wheel for the target arch. chromium is mrbilit's browser (see
+# above for why it's apt's package, not Playwright's own download).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libxml2-dev libxslt1-dev \
         chromium \
