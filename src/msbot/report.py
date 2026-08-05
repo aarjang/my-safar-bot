@@ -119,6 +119,73 @@ def comparison_frame(
     return df.sort_values(["route", "date", "cabin"]) if not df.empty else df
 
 
+#: display order + labels for the light report's competitor columns — the
+#: client's own wording, verbatim (English site names, Persian for the rest).
+LIGHT_SOURCE_COLUMNS = [
+    ("tktfly", "نرخ TicketFly"),
+    ("flytoday", "نرخ FlyToday"),
+    ("snapptrip", "نرخ اسنپ‌تریپ"),
+    ("mrbilit", "نرخ مستربلیط"),
+    ("alibaba", "نرخ علی‌بابا"),
+]
+
+CABIN_FA = {
+    "economy": "اکونومی",
+    "premium_economy": "پرمیوم اکونومی",
+    "business": "بیزینس",
+    "first": "فرست",
+    "unknown": "نامشخص",
+}
+
+
+def light_report_frame(
+    offers: List[FlightOffer],
+    base_strategy: str = "mysafar",
+    base_table: Optional[BaseFareTable] = None,
+    pattern_cfg: Optional[PatternConfig] = None,
+    regulated_cfg: Optional[Dict[str, object]] = None,
+) -> pd.DataFrame:
+    """The client's own words: "خروجی اکسل رو یه مقدار سبک‌تر کنیم... فقط وقتی
+    نرخ‌ها با الگوی مارکاپی که قبلاً تعریف شده فرق داشته باشن توی گزارش بیاد...
+    پروازی که توی سایت ما موجود نیست رو هم نشون [بده]".
+
+    Same underlying data as :func:`comparison_frame` — same pattern
+    thresholds, same regulated-airline exclusion — just narrowed to what's
+    actually actionable for a manual markup review:
+
+    * only the 10 columns asked for (route/date/cabin/airline + each site's
+      price), dropping the diff/%/base-fare columns that make the full
+      export slow to scan;
+    * only rows that need a look: outside the expected pattern for their
+      cabin (``pattern_ok is False``), *or* a flight a competitor sells that
+      we don't (``mysafar_toman`` is empty) — rows that are simply fine
+      (``pattern_ok is True``) are the ones this is meant to filter out.
+    """
+    comp = comparison_frame(offers, base_strategy, base_table, pattern_cfg=pattern_cfg, regulated_cfg=regulated_cfg)
+    if comp.empty:
+        return comp
+
+    flagged = comp[(comp["pattern_ok"] == False) | (comp["mysafar_toman"].isna())]  # noqa: E712
+    if flagged.empty:
+        return pd.DataFrame(columns=[
+            "مسیر", "تاریخ", "کابین", "ایرلاین", "نرخ مای‌سفر",
+            *[label for _, label in LIGHT_SOURCE_COLUMNS],
+        ])
+
+    out = pd.DataFrame({
+        "مسیر": flagged["route"],
+        "تاریخ": flagged["date_jalali"],
+        "کابین": flagged["cabin"].map(lambda c: CABIN_FA.get(c, c)),
+        "ایرلاین": flagged.get("mysafar_airline"),
+        "نرخ مای‌سفر": flagged["mysafar_toman"],
+    })
+    for source_id, label in LIGHT_SOURCE_COLUMNS:
+        col = "{}_toman".format(source_id)
+        out[label] = flagged[col] if col in flagged.columns else None
+
+    return out.sort_values(["مسیر", "تاریخ"])
+
+
 def write_reports(
     offers: List[FlightOffer],
     outdir: str,
@@ -131,18 +198,25 @@ def write_reports(
     Path(outdir).mkdir(parents=True, exist_ok=True)
     raw = offers_frame(offers)
     comp = comparison_frame(offers, base_strategy, base_table, pattern_cfg=pattern_cfg, regulated_cfg=regulated_cfg)
+    light = light_report_frame(offers, base_strategy, base_table, pattern_cfg=pattern_cfg, regulated_cfg=regulated_cfg)
 
     paths: Dict[str, str] = {}
     raw_csv = str(Path(outdir) / "offers_{}.csv".format(stamp))
     comp_csv = str(Path(outdir) / "comparison_{}.csv".format(stamp))
+    light_csv = str(Path(outdir) / "light_{}.csv".format(stamp))
     raw.to_csv(raw_csv, index=False, encoding="utf-8-sig")
     comp.to_csv(comp_csv, index=False, encoding="utf-8-sig")
+    light.to_csv(light_csv, index=False, encoding="utf-8-sig")
     paths["offers_csv"] = raw_csv
     paths["comparison_csv"] = comp_csv
+    paths["light_csv"] = light_csv
 
     xlsx = str(Path(outdir) / "markup_{}.xlsx".format(stamp))
     try:
         with pd.ExcelWriter(xlsx, engine="openpyxl") as writer:
+            # sheet order matters for a human opening the file — put the
+            # thing they actually asked to review first.
+            light.to_excel(writer, sheet_name="نیاز به بررسی", index=False)
             comp.to_excel(writer, sheet_name="comparison", index=False)
             raw.to_excel(writer, sheet_name="offers", index=False)
         paths["excel"] = xlsx

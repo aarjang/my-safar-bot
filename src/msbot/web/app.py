@@ -36,7 +36,7 @@ from ..http import Fetcher
 from ..markup import BaseFareTable
 from ..pattern import CABIN_IDS, PatternConfig, PatternSettingsStore
 from .. import regulated as regulatedmod
-from ..report import comparison_frame, offers_frame
+from ..report import comparison_frame, offers_frame, light_report_frame
 from ..scrapers.base import get_scraper_classes
 from ..storage import Storage
 from .auth import BasicAuthMiddleware, resolve_credentials
@@ -309,13 +309,18 @@ def get_comparison(job_id: str) -> Dict[str, Any]:
 
 
 @app.get("/api/csv")
-def get_csv(job_id: str, kind: str = Query("comparison", pattern="^(comparison|offers)$")):
+def get_csv(job_id: str, kind: str = Query("comparison", pattern="^(comparison|offers|light)$")):
     job = _jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
     offers = [o for r in job.results for o in r.offers]
     if kind == "comparison":
         df = comparison_frame(
+            offers, job.base_strategy, job.base_table, pattern_cfg=_current_pattern_cfg(),
+            regulated_cfg=job.cfg.get("regulated_airlines"),
+        )
+    elif kind == "light":
+        df = light_report_frame(
             offers, job.base_strategy, job.base_table, pattern_cfg=_current_pattern_cfg(),
             regulated_cfg=job.cfg.get("regulated_airlines"),
         )

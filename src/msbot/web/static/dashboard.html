@@ -244,6 +244,7 @@
       <span class="sub">فیلتر کلاس و وضعیت الان روی سطر اول خود جدول است — روی هر ستون هم بزنید تا مرتب شود.</span>
       <span class="grow"></span>
       <button class="btn ghost" id="csvBtn">⬇ خروجی CSV</button>
+      <button class="btn ghost" id="lightCsvBtn" title="فقط مسیر/تاریخ/کابین/ایرلاین و نرخ‌ها — فقط مواردی که با الگوی مارکاپ فرق دارن یا در مای‌سفر نیستن">⬇ خروجی سبک</button>
     </div>
     <div class="tblwrap"><table id="rateTbl"></table></div>
     <div class="note" id="rateNote">برای شروع، مبدأ/مقصد و بازهٔ تاریخ را انتخاب و «تحلیل نرخ‌ها» را بزنید.</div>
@@ -1024,6 +1025,11 @@ function exportCSV(){
   if (!state.jobId) { toast('ابتدا یک تحلیل اجرا کنید'); return; }
   window.open('/api/csv?job_id='+state.jobId+'&kind=comparison', '_blank');
 }
+function exportLightCSV(){
+  if (!state.jobId) { toast('ابتدا یک تحلیل اجرا کنید'); return; }
+  window.open('/api/csv?job_id='+state.jobId+'&kind=light', '_blank');
+}
+$('lightCsvBtn').addEventListener('click', exportLightCSV);
 
 /* ================= Wire events ================= */
 $('tabs').addEventListener('click',e=>{const t=e.target.closest('.tab');if(t)switchTab(t.dataset.tab);});
