@@ -31,12 +31,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         chromium \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --timeout=120 --retries=8 -r requirements.txt
-# Python driver only — do NOT run `playwright install`, it would try (and
-# fail) to fetch a second Chromium build from the blocked CDN. mrbilit.py's
-# own _LOCAL_CHROMES fallback finds apt's /usr/bin/chromium instead.
-RUN pip install --no-cache-dir --timeout=120 --retries=8 playwright
+# Installed from the lock, not requirements.txt: resolving open version
+# ranges makes pip fetch metadata for hundreds of candidates, and on this
+# connection one dropped request surfaces as a bogus pandas/numpy
+# "ResolutionImpossible". Exact pins mean one download per package.
+#
+# The lock already includes playwright — the Python driver only. Do NOT add
+# `playwright install`: it fetches a second Chromium from Playwright's CDN,
+# which geo-blocks Iranian IPs (HTTP 403). mrbilit.py's _LOCAL_CHROMES
+# fallback finds apt's /usr/bin/chromium instead.
+COPY requirements.txt requirements.lock ./
+RUN pip install --no-cache-dir --timeout=120 --retries=8 -r requirements.lock
 
 COPY src ./src
 COPY config.example.yaml ./config.yaml
