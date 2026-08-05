@@ -52,7 +52,9 @@ def _supported_encodings() -> str:
 
     Deriving the header from what's importable means the claim and the
     capability can't drift apart again: install ``brotli`` and we ask for it,
-    drop it and we stop asking.
+    drop it and we stop asking. The package itself stays optional — asking
+    only for gzip/deflate is a fine outcome (verified against snapptrip), so
+    this is the whole fix rather than a workaround for a missing dependency.
     """
     encodings = ["gzip", "deflate"]
     for mod in ("brotli", "brotlicffi"):
