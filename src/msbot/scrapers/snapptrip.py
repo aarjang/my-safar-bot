@@ -88,7 +88,17 @@ class SnappTripScraper(BaseScraper):
             search_date=day,
             price_rial=int(price),
             airline_code=airline_code,
-            airline_name=carrier.get("faName") or carrier.get("name"),
+            # snapptrip now returns `airlineName`; `faName`/`name` are kept as
+            # fallbacks for older shapes. Not cosmetic: the regulated-airline
+            # exclusion matches on name *or* code, and Caspian/Iran Airtour
+            # have no code alias — a null name here silently readmits them to
+            # the comparison, which is the exact false "we're too expensive"
+            # flag that rule exists to prevent (see msbot/regulated.py).
+            airline_name=(
+                carrier.get("airlineName")
+                or carrier.get("faName")
+                or carrier.get("name")
+            ),
             flight_number=flight_no,
             cabin=normalize_cabin(cabin_raw),
             cabin_raw=cabin_raw,

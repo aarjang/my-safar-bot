@@ -29,10 +29,12 @@ rate_limit:
   timeout: 60
   retries: 3
   per_host:             # override min_interval for specific hosts
-    www.flytoday.ir: 12.0
+    www.flytoday.ir: 20.0
     ws.alibaba.ir: 3.0
   per_host_ceiling: 45.0       # a 429-stretched host's floor can never exceed this
-  max_request_budget: 120.0   # give up on a single request past this much total wait
+  max_request_budget: 180.0   # give up on a single request past this much total wait
+  cooldown_after: 2           # consecutive 429s before a host is parked entirely
+  cooldown_seconds: 60.0      # how long that pause lasts, so its window can reset
   max_consecutive_errors: 3   # trip the circuit breaker after this many fails in a row
 
 storage:

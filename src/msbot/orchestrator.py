@@ -42,7 +42,9 @@ def build_fetcher(cfg: Dict[str, Any]) -> Fetcher:
         proxy=cfg.get("proxy"),
         per_host=dict(rl.get("per_host") or {}),
         per_host_ceiling=rl.get("per_host_ceiling", 45.0),
-        max_request_budget=rl.get("max_request_budget", 120.0),
+        max_request_budget=rl.get("max_request_budget", 180.0),
+        cooldown_after=rl.get("cooldown_after", 2),
+        cooldown_seconds=rl.get("cooldown_seconds", 60.0),
     )
 
 

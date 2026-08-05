@@ -39,11 +39,37 @@ DEFAULT_UA = (
 #: sends User-Agent + Accept is itself a fingerprint some anti-bot layers key
 #: on. None of this defeats a determined block; it just avoids being the
 #: easiest, laziest signal to flag.
+def _supported_encodings() -> str:
+    """Advertise only the content encodings we can actually decode.
+
+    httpx handles gzip/deflate on its own but needs the optional ``brotli``/
+    ``brotlicffi`` package to read ``br``. Hard-coding ``br`` in the header
+    without it is a silent trap: most sites ignore the offer, but snapptrip
+    takes it at its word and returns real brotli, which then surfaced as
+    ``'utf-8' codec can't decode byte 0x81 in position 0`` on an **HTTP 200** —
+    reported as a scraper failure, and (three in a row) as a circuit-breaker
+    skip, which reads like rate limiting and is nothing of the sort.
+
+    Deriving the header from what's importable means the claim and the
+    capability can't drift apart again: install ``brotli`` and we ask for it,
+    drop it and we stop asking.
+    """
+    encodings = ["gzip", "deflate"]
+    for mod in ("brotli", "brotlicffi"):
+        try:
+            __import__(mod)
+        except ImportError:
+            continue
+        encodings.append("br")
+        break
+    return ", ".join(encodings)
+
+
 BASE_HEADERS = {
     "User-Agent": DEFAULT_UA,
     "Accept-Language": "fa-IR,fa;q=0.9,en-US;q=0.8,en;q=0.7",
     "Accept": "application/json, text/plain, */*",
-    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Encoding": _supported_encodings(),
     "Connection": "keep-alive",
     "sec-ch-ua": '"Not/A)Brand";v="99", "Chromium";v="128", "Google Chrome";v="128"',
     "sec-ch-ua-mobile": "?0",
@@ -61,7 +87,19 @@ DEFAULT_PER_HOST_CEILING = 45.0
 #: a single request will not be retried past this much total wall-clock time
 #: (waiting + attempts) — better to surface a clear failure fast than to sit
 #: silently for tens of minutes.
-DEFAULT_MAX_REQUEST_BUDGET = 120.0
+DEFAULT_MAX_REQUEST_BUDGET = 180.0
+
+#: Once a host has 429'd this many times in a row, stop hitting it entirely
+#: for :data:`DEFAULT_COOLDOWN_SECONDS` instead of continuing to poke it at
+#: the (stretched) floor. Flytoday's gateway does not throttle on spacing
+#: alone — the 2026-08-05 logs show it still answering 429 with requests a
+#: full 41s apart, i.e. once its window is tripped it rejects everything
+#: until that window rolls over. Poking it every 45s just keeps the window
+#: alive and burns the retry budget for nothing; one bounded pause lets it
+#: reset. Bounded on purpose: this is a single fixed wait, not the
+#: compounding backoff behind the 2026-07-28 41-minute stall.
+DEFAULT_COOLDOWN_AFTER = 2
+DEFAULT_COOLDOWN_SECONDS = 60.0
 
 
 class RateLimiter:
@@ -81,6 +119,8 @@ class RateLimiter:
         jitter: float = 1.0,
         per_host: Optional[Dict[str, float]] = None,
         per_host_ceiling: float = DEFAULT_PER_HOST_CEILING,
+        cooldown_after: int = DEFAULT_COOLDOWN_AFTER,
+        cooldown_seconds: float = DEFAULT_COOLDOWN_SECONDS,
     ) -> None:
         self.min_interval = min_interval
         self.jitter = jitter
@@ -89,25 +129,46 @@ class RateLimiter:
         # this, never below it; per_host itself is mutated up/down at runtime.
         self._configured_floor = dict(per_host or {})
         self.per_host_ceiling = per_host_ceiling
+        self.cooldown_after = cooldown_after
+        self.cooldown_seconds = cooldown_seconds
         self._last: Dict[str, float] = {}
+        self._429_streak: Dict[str, int] = {}
+        self._cooldown_until: Dict[str, float] = {}
         self._lock = threading.Lock()
 
     def current_floor(self, host: str) -> float:
         return self.per_host.get(host, self.min_interval)
 
-    def note_429(self, host: str) -> float:
-        """Stretch this host's floor after a 429 — capped, never unbounded."""
+    def note_429(self, host: str) -> "tuple[float, bool]":
+        """Stretch this host's floor after a 429 — capped, never unbounded.
+
+        Returns ``(floor, cooling_down)``. ``cooling_down`` is True when this
+        429 was the one that armed the fixed cooldown window, so the caller
+        can skip its own backoff (:meth:`wait` now covers it).
+        """
         with self._lock:
             current = self.per_host.get(host, self.min_interval)
             bumped = min(max(current * 1.5, 8.0), self.per_host_ceiling)
             self.per_host[host] = bumped
-            return bumped
+
+            streak = self._429_streak.get(host, 0) + 1
+            self._429_streak[host] = streak
+            cooling = False
+            if self.cooldown_seconds > 0 and streak >= self.cooldown_after:
+                # re-arm from *now* on every further 429, so a host that keeps
+                # refusing gets the full window each time rather than a
+                # cooldown that quietly expired mid-refusal.
+                self._cooldown_until[host] = time.monotonic() + self.cooldown_seconds
+                cooling = True
+            return bumped, cooling
 
     def note_success(self, host: str) -> None:
         """Ease a stretched floor back down once a host is behaving again."""
-        if host not in self.per_host:
-            return
         with self._lock:
+            self._429_streak.pop(host, None)
+            self._cooldown_until.pop(host, None)
+            if host not in self.per_host:
+                return
             floor = self._configured_floor.get(host, self.min_interval)
             current = self.per_host[host]
             if current > floor:
@@ -124,8 +185,17 @@ class RateLimiter:
             last = self._last.get(host, 0.0)
             base = self.per_host.get(host, self.min_interval)
             gap = base + random.uniform(0, self.jitter)
-            sleep_for = last + gap - now
-            self._last[host] = max(now, last + gap)
+            # an armed cooldown parks the host until its window rolls over;
+            # otherwise this is just the usual floor. Whichever is later wins.
+            floor_ready = last + gap
+            ready = max(floor_ready, self._cooldown_until.get(host, 0.0))
+            sleep_for = ready - now
+            # only the *floor* is booked into _last. Reserving the cooldown's
+            # far-future timestamp here would outlive the cooldown itself:
+            # note_success clears _cooldown_until, but a slot already booked
+            # 60s out would still be waited on, stalling a host that had
+            # started answering again.
+            self._last[host] = max(now, floor_ready)
         return _interruptible_sleep(sleep_for, cancel_event)
 
 
@@ -154,8 +224,13 @@ class Fetcher:
         per_host: Optional[Dict[str, float]] = None,
         per_host_ceiling: float = DEFAULT_PER_HOST_CEILING,
         max_request_budget: float = DEFAULT_MAX_REQUEST_BUDGET,
+        cooldown_after: int = DEFAULT_COOLDOWN_AFTER,
+        cooldown_seconds: float = DEFAULT_COOLDOWN_SECONDS,
     ) -> None:
-        self.limiter = RateLimiter(min_interval, jitter, per_host, per_host_ceiling)
+        self.limiter = RateLimiter(
+            min_interval, jitter, per_host, per_host_ceiling,
+            cooldown_after=cooldown_after, cooldown_seconds=cooldown_seconds,
+        )
         self.retries = retries
         self.max_request_budget = max_request_budget
         #: set by the job runner so a cancelled job interrupts an in-flight
@@ -220,8 +295,11 @@ class Fetcher:
 
             if resp.status_code in RETRY_STATUS and attempt < self.retries:
                 if resp.status_code == 429:
-                    floor = self.limiter.note_429(host)
-                    backoff = min(15 * attempt, 60)
+                    floor, cooling = self.limiter.note_429(host)
+                    # when a cooldown is armed, wait() already parks this host
+                    # for the full window — stacking the escalating backoff on
+                    # top of it just spends the request budget twice over.
+                    backoff = 0.0 if cooling else min(15 * attempt, 60)
                 else:
                     floor = None
                     backoff = min(2 ** attempt, 20)

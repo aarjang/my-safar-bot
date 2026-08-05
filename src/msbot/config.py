@@ -35,15 +35,22 @@ DEFAULTS: Dict[str, Any] = {
         "jitter": 1.5,
         "timeout": 60,
         "retries": 3,
-        # flytoday's gateway starts returning 429 well before the others do
-        "per_host": {"www.flytoday.ir": 12.0, "ws.alibaba.ir": 3.0},
+        # flytoday's gateway starts returning 429 well before the others do —
+        # 12s held for the first few requests then tripped its window every
+        # run, so it starts wider now.
+        "per_host": {"www.flytoday.ir": 20.0, "ws.alibaba.ir": 3.0},
         # a 429-stretched host's floor can never be asked to wait longer than
         # this, no matter how many consecutive 429s it's had (see http.py's
         # 2026-07-28 incident note — this is the fix for the 41-minute stall).
         "per_host_ceiling": 45.0,
         # a single request gives up (raises) past this much total wall-clock
         # time across all its retries/backoff, rather than compounding forever.
-        "max_request_budget": 120.0,
+        "max_request_budget": 180.0,
+        # after this many consecutive 429s, stop hitting the host entirely for
+        # `cooldown_seconds` so its rate-limit window can roll over — spacing
+        # alone doesn't clear flytoday's (it 429s even 41s apart once tripped).
+        "cooldown_after": 2,
+        "cooldown_seconds": 60.0,
         # a source that fails this many times in a row within one run trips a
         # circuit breaker: its remaining tasks are marked skipped instantly
         # (no network calls) instead of grinding through the same failure.
