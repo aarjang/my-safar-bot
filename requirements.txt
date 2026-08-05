@@ -10,8 +10,3 @@ uvicorn[standard]>=0.29
 bcrypt>=4.1
 # optional, only for the mrbilit scraper:
 # playwright>=1.45
-# genuinely optional: with it we ask for (and decode) brotli-compressed
-# responses, without it we simply don't advertise `br` and sites fall back to
-# gzip. See _supported_encodings() in src/msbot/http.py — asking for `br`
-# without being able to decode it is what broke snapptrip.
-# brotli>=1.1

@@ -52,9 +52,13 @@ def _supported_encodings() -> str:
 
     Deriving the header from what's importable means the claim and the
     capability can't drift apart again: install ``brotli`` and we ask for it,
-    drop it and we stop asking. The package itself stays optional — asking
-    only for gzip/deflate is a fine outcome (verified against snapptrip), so
-    this is the whole fix rather than a workaround for a missing dependency.
+    drop it and we stop asking. The package stays *out* of requirements.txt
+    on purpose: asking only for gzip/deflate is a perfectly good outcome
+    (verified against live snapptrip), and adding it there would invalidate
+    the Docker layer that installs every dependency — a full re-resolve on
+    the deploy server's PyPI connection times out and surfaces as a bogus
+    pandas/numpy "ResolutionImpossible". ``pip install brotli`` still works
+    for anyone who wants it; this function picks it up automatically.
     """
     encodings = ["gzip", "deflate"]
     for mod in ("brotli", "brotlicffi"):
