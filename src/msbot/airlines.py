@@ -21,40 +21,46 @@ name matching prefers the longest alias that fits.
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .models import FlightOffer
 
-#: canonical key -> (IATA/site codes, name fragments in any script)
-AIRLINE_ALIASES: Dict[str, Dict[str, List[str]]] = {
-    "iranair": {"codes": ["ir"], "names": ["ایران ایر", "iranair", "iran air"]},
-    "iran_airtour": {
+#: canonical key -> {"fa": the label shown in reports, "codes": IATA/site
+#: codes, "names": name fragments in any script}
+AIRLINE_ALIASES: Dict[str, Dict[str, Any]] = {
+    "iranair": {"fa": "ایران ایر", "codes": ["ir"], "names": ["ایران ایر", "iranair", "iran air"]},
+    "iran_airtour": {"fa": "ایران ایرتور", 
         "codes": ["b9"],
         "names": ["ایران ایر تور", "ایران ایرتور", "ایرتور", "iran airtour", "airtour"],
     },
-    "mahan": {"codes": ["w5"], "names": ["ماهان", "mahan"]},
-    "caspian": {"codes": ["iv", "cpn"], "names": ["کاسپین", "caspian"]},
-    "ata": {"codes": ["i3"], "names": ["آتا", "ata"]},
-    "meraj": {"codes": ["j1"], "names": ["معراج", "meraj"]},
-    "qeshm": {"codes": ["qb"], "names": ["قشم", "qeshm"]},
-    "soroush": {"codes": ["shr"], "names": ["سروش", "soroush"]},
-    "taban": {"codes": ["hh"], "names": ["تابان", "taban"]},
-    "varesh": {"codes": ["vr"], "names": ["وارش", "varesh"]},
-    "saha": {"codes": ["irz"], "names": ["ساها", "saha"]},
-    "sepehran": {"codes": ["sp"], "names": ["سپهران", "sepehran"]},
-    "zagros": {"codes": ["zv", "iz"], "names": ["زاگرس", "zagros"]},
-    "kish": {"codes": ["y9"], "names": ["کیش ایر", "کیش", "kish"]},
-    "karun": {"codes": ["kr", "eq"], "names": ["کارون", "karun"]},
-    "pouya": {"codes": ["pya"], "names": ["پویا", "pouya"]},
-    "sepahan": {"codes": ["ihc"], "names": ["سپاهان", "sepahan"]},
-    "chabahar": {"codes": ["ib"], "names": ["چابهار", "chabahar"]},
-    "yazd": {"codes": ["yzr"], "names": ["یزد", "yazd"]},
-    "fly_persia": {"codes": ["fp"], "names": ["فلای پرشیا", "flypersia", "fly persia"]},
-    "turkish": {"codes": ["tk"], "names": ["ترکیش", "turkish"]},
-    "pegasus": {"codes": ["pc"], "names": ["پگاسوس", "pegasus"]},
-    "qatar": {"codes": ["qr"], "names": ["قطر", "qatar"]},
-    "flydubai": {"codes": ["fz"], "names": ["فلای دبی", "flydubai", "fly dubai"]},
-    "emirates": {"codes": ["ek"], "names": ["امارات", "emirates"]},
+    "mahan": {"fa": "ماهان", "codes": ["w5"], "names": ["ماهان", "mahan"]},
+    "caspian": {"fa": "کاسپین", "codes": ["iv", "cpn"], "names": ["کاسپین", "caspian"]},
+    "ata": {"fa": "آتا", "codes": ["i3"], "names": ["آتا", "ata"]},
+    "meraj": {"fa": "معراج", "codes": ["j1"], "names": ["معراج", "meraj"]},
+    "qeshm": {"fa": "قشم ایر", "codes": ["qb"], "names": ["قشم", "qeshm"]},
+    "soroush": {"fa": "سروش ایر", "codes": ["shr"], "names": ["سروش", "soroush"]},
+    "taban": {"fa": "تابان", "codes": ["hh"], "names": ["تابان", "taban"]},
+    "varesh": {"fa": "وارش", "codes": ["vr"], "names": ["وارش", "varesh"]},
+    "saha": {"fa": "ساها", "codes": ["irz", "sa"], "names": ["ساها", "saha"]},
+    "sepehran": {"fa": "سپهران", "codes": ["sp", "is"], "names": ["سپهران", "sepehran"]},
+    "zagros": {"fa": "زاگرس", "codes": ["zv", "iz"], "names": ["زاگرس", "zagros"]},
+    "ava": {"fa": "آوا ایر", "codes": ["ax", "axv"], "names": ["آوا", "ava"]},
+    # Fly Kish and Kish Air are different carriers, and "کیش" matches both —
+    # the longest-alias-first rule below is what keeps them apart, so the
+    # Fly Kish spellings must stay longer than the bare "کیش".
+    "fly_kish": {"fa": "فلای کیش", "codes": ["fk", "tkn"], "names": ["فلای کیش", "fly kish", "flykish"]},
+    "kish": {"fa": "کیش ایر", "codes": ["y9"], "names": ["کیش ایر", "kish air", "کیش", "kish"]},
+    "karun": {"fa": "کارون", "codes": ["kr", "eq"], "names": ["کارون", "karun"]},
+    "pouya": {"fa": "پویا", "codes": ["pya"], "names": ["پویا", "pouya"]},
+    "sepahan": {"fa": "سپاهان", "codes": ["ihc"], "names": ["سپاهان", "sepahan"]},
+    "chabahar": {"fa": "چابهار", "codes": ["ib"], "names": ["چابهار", "chabahar"]},
+    "yazd": {"fa": "یزد", "codes": ["yzr"], "names": ["یزد", "yazd"]},
+    "fly_persia": {"fa": "فلای پرشیا", "codes": ["fp"], "names": ["فلای پرشیا", "flypersia", "fly persia"]},
+    "turkish": {"fa": "ترکیش", "codes": ["tk"], "names": ["ترکیش", "turkish"]},
+    "pegasus": {"fa": "پگاسوس", "codes": ["pc"], "names": ["پگاسوس", "pegasus"]},
+    "qatar": {"fa": "قطر", "codes": ["qr"], "names": ["قطر", "qatar"]},
+    "flydubai": {"fa": "فلای دبی", "codes": ["fz"], "names": ["فلای دبی", "flydubai", "fly dubai"]},
+    "emirates": {"fa": "امارات", "codes": ["ek"], "names": ["امارات", "emirates"]},
 }
 
 _ARABIC_YE_KE = str.maketrans({"ي": "ی", "ك": "ک", "‌": " "})
@@ -107,11 +113,22 @@ def canonical(offer: FlightOffer) -> str:
 
 
 def display_name(offers: List[FlightOffer]) -> Optional[str]:
-    """Pick the friendliest label for a flight the client will read: a Persian
-    name if any site gave one, otherwise whatever exists."""
+    """The label for a flight, in the client's report.
+
+    Prefers this table's own Persian name so a carrier reads identically on
+    every row. Taking it from the offers instead made the label depend on
+    which sites happened to cover that flight — the same airline appeared as
+    both "معراج" and "هواپیمایی معراج" down one column.
+
+    Falls back to a site's own name for carriers not in the table.
+    """
+    for o in offers:
+        fa = AIRLINE_ALIASES.get(canonical(o), {}).get("fa")
+        if fa:
+            return fa
     persian = [o.airline_name for o in offers if o.airline_name and re.search(r"[؀-ۿ]", o.airline_name)]
     if persian:
-        return max(persian, key=len)  # "هواپیمایی آتا" reads better than "آتا"
+        return max(persian, key=len)
     named = [o.airline_name for o in offers if o.airline_name]
     return named[0] if named else None
 

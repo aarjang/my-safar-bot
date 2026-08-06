@@ -98,6 +98,17 @@ class TktFlyScraper(BaseScraper):
                 inferred = _cabin_from_code(flight_number)
                 if inferred:
                     cabin, cabin_inferred = inferred, True
+                else:
+                    # Neither a chip nor a coded suffix means economy — tktfly
+                    # only marks the premium classes, economy is the unlabelled
+                    # default. Leaving these "unknown" was splitting a flight
+                    # into two report rows (an economy one and a phantom
+                    # "نامشخص" one carrying only tktfly), because a cabin that
+                    # matches no other site can never join their row.
+                    # Checked against the other five sites on 419 offers: all
+                    # 48 such rows priced inside the economy range for their
+                    # own flight, none anywhere near business.
+                    cabin, cabin_inferred = "economy", True
 
             tooltip = block.select_one(".efitooltip")
             airline_name = baggage = aircraft = None
