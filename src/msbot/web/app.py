@@ -113,7 +113,7 @@ def _browser_available() -> bool:
 
 _BROWSER_AVAILABLE = _browser_available()
 
-#: display labels for /api/meta — keyed the same as regulated.DEFAULT_REGULATED_ALIASES
+#: display labels for /api/meta — keyed the same as regulated.DEFAULT_REGULATED_KEYS
 REGULATED_LABELS_FA = {
     "mahan": "ماهان",
     "saha": "ساها",
@@ -203,7 +203,7 @@ def meta() -> Dict[str, Any]:
         "expected_pattern": _current_pattern_cfg().to_dict(),
         "regulated_airlines": {
             "enabled": bool((_cfg.get("regulated_airlines") or {}).get("enabled", True)),
-            "names_fa": [REGULATED_LABELS_FA[k] for k in regulatedmod.DEFAULT_REGULATED_ALIASES],
+            "names_fa": [REGULATED_LABELS_FA.get(k, k) for k in regulatedmod.default_keys()],
         },
         "default_start": (today + timedelta(days=1)).isoformat(),
         "default_days": min(_cfg.get("days", 14), 14),

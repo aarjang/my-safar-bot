@@ -12,6 +12,8 @@ from .models import FlightOffer
 from .pattern import PatternConfig
 from . import pattern as patternmod
 from . import regulated as regulatedmod
+from . import airlines as airlinesmod
+from . import suppliers as suppliersmod
 
 OUR_SOURCE = "mysafar"
 
@@ -32,7 +34,11 @@ def comparison_frame(
     pattern_cfg: Optional[PatternConfig] = None,
     regulated_cfg: Optional[Dict[str, object]] = None,
 ) -> pd.DataFrame:
-    """One row per (route, date, cabin): our price vs each competitor + markup.
+    """One row per *flight* — (route, date, cabin, departure, airline) — with
+    our price against each competitor's price for that same flight, + markup.
+
+    Matching on the flight rather than just the cabin is what makes the
+    numbers comparable at all: see the grouping comment below.
 
     Offers for airline-regulated-fare carriers (Mahan/Saha/Caspian/Iran
     Airtour/Sepehran by default — see ``msbot.regulated``) are dropped before
@@ -57,11 +63,30 @@ def comparison_frame(
         ]
     rows: List[Dict[str, object]] = []
 
-    keys = sorted({(o.route, o.search_date, o.cabin) for o in offers})
-    for route, day, cabin in keys:
-        if cabins and cabin not in cabins:
+    # Group per *flight*, not per cabin. Grouping only by (route, date, cabin)
+    # compared our cheapest business seat against a competitor's cheapest
+    # business seat on an entirely different aircraft — which is how the
+    # export came to show Alibaba at 57.9M against our 21.1M when the two
+    # sites were within a few hundred thousand Toman of each other on every
+    # flight they both sold. Departure time plus canonical airline identifies
+    # the flight on all six sites (see msbot.airlines for why neither field
+    # works alone).
+    grouped: Dict[tuple, List[FlightOffer]] = {}
+    for o in offers:
+        if cabins and o.cabin not in cabins:
             continue
-        cell = [o for o in offers if o.route == route and o.search_date == day and o.cabin == cabin]
+        key = (
+            o.route,
+            o.search_date,
+            o.cabin,
+            airlinesmod.departure_hhmm(o.departure_time),
+            airlinesmod.canonical(o),
+        )
+        grouped.setdefault(key, []).append(o)
+
+    for key in sorted(grouped, key=lambda k: tuple("" if p is None else p for p in k)):
+        route, day, cabin, departure, _airline_key = key
+        cell = grouped[key]
         by_source: Dict[str, List[FlightOffer]] = {}
         for o in cell:
             by_source.setdefault(o.source, []).append(o)
@@ -76,15 +101,23 @@ def comparison_frame(
             "date_jalali": to_jalali_slash(day),
             "weekday": weekday_fa(day),
             "cabin": cabin,
+            "departure": departure,
+            # the row's own airline, taken from whichever site named it — so a
+            # flight we don't sell still shows its carrier rather than a blank.
+            "airline": airlinesmod.display_name(cell),
             "base_fare_toman": base_fare // 10 if base_fare else None,
             "base_fare_source": base_label,
         }
 
         ours = by_source.get(OUR_SOURCE) or []
         our_min = min((o.price_rial for o in ours), default=None)
+        cheapest_ours = min(ours, key=lambda o: o.price_rial) if ours else None
         row["mysafar_toman"] = our_min // 10 if our_min else None
-        row["mysafar_airline"] = (
-            min(ours, key=lambda o: o.price_rial).airline_name if ours else None
+        row["mysafar_airline"] = cheapest_ours.airline_name if cheapest_ours else None
+        # the consolidator behind *our* listing — admin-visible on mysafar's
+        # own site, and blank unless data/suppliers.json names the id.
+        row["mysafar_supplier"] = suppliersmod.name_for(
+            (cheapest_ours.raw or {}).get("supplierId") if cheapest_ours else None
         )
         row["mysafar_markup_pct"] = (
             markup_percent(our_min, base_fare) if our_min and base_fare else None
@@ -116,7 +149,9 @@ def comparison_frame(
         rows.append(row)
 
     df = pd.DataFrame(rows)
-    return df.sort_values(["route", "date", "cabin"]) if not df.empty else df
+    if df.empty:
+        return df
+    return df.sort_values(["route", "date", "cabin", "departure"], na_position="last")
 
 
 #: display order + labels for the light report's competitor columns — the
@@ -168,22 +203,29 @@ def light_report_frame(
     flagged = comp[(comp["pattern_ok"] == False) | (comp["mysafar_toman"].isna())]  # noqa: E712
     if flagged.empty:
         return pd.DataFrame(columns=[
-            "مسیر", "تاریخ", "کابین", "ایرلاین", "نرخ مای‌سفر",
+            "مسیر", "تاریخ", "ساعت", "کابین", "ایرلاین", "نرخ مای‌سفر",
             *[label for _, label in LIGHT_SOURCE_COLUMNS],
         ])
 
     out = pd.DataFrame({
         "مسیر": flagged["route"],
         "تاریخ": flagged["date_jalali"],
+        # rows are per-flight now, so without the departure time several rows
+        # would share a route/date/cabin and be impossible to tell apart —
+        # it's also how the client identifies a flight when checking by hand.
+        "ساعت": flagged["departure"],
         "کابین": flagged["cabin"].map(lambda c: CABIN_FA.get(c, c)),
-        "ایرلاین": flagged.get("mysafar_airline"),
+        # the flight's own airline, not just the one on our listing, so rows
+        # for flights we don't sell still name the carrier.
+        "ایرلاین": flagged["airline"],
+        "تأمین‌کننده": flagged["mysafar_supplier"],
         "نرخ مای‌سفر": flagged["mysafar_toman"],
     })
     for source_id, label in LIGHT_SOURCE_COLUMNS:
         col = "{}_toman".format(source_id)
         out[label] = flagged[col] if col in flagged.columns else None
 
-    return out.sort_values(["مسیر", "تاریخ"])
+    return out.sort_values(["مسیر", "تاریخ", "ساعت"], na_position="last")
 
 
 def write_reports(

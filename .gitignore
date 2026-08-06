@@ -4,6 +4,7 @@ __pycache__/
 data/history.sqlite
 data/base_fares.csv
 data/pattern_overrides.json
+data/suppliers.json
 data/.dashboard_credentials.json
 reports/*.csv
 reports/*.xlsx

@@ -14,11 +14,7 @@ From the client, verbatim:
 In plain terms: for these five airlines, the *airline itself* sets the
 selling price — it isn't ours to discount, and if a competitor shows a lower
 number, that's the competitor quietly rebating their commission (arguably
-against the airline's own circular), not evidence our markup is wrong. Iran
-Airtour and Sepehran are reported as already consistent everywhere, so
-excluding them changes nothing in practice; Mahan/Saha/Caspian are the ones
-where a competitor's non-compliant lower price would otherwise drag down
-"market_min" and trigger a false "we're too expensive, lower your price" flag.
+against the airline's own circular), not evidence our markup is wrong.
 
 So offers from any of these five are dropped before the comparison/markup
 table is built — for *both* our own offers and competitors' — rather than
@@ -27,77 +23,83 @@ undercutting." They still show up in the raw offer dump (`offers_frame`/
 `offers_<ts>.csv`) for the record; they just don't participate in the
 markup-comparison math, since that price isn't a markup decision at all.
 
-**System fares only, not charter.** Follow-up from the client:
+**All fares, charter included.** An earlier reading of this rule carved out
+confirmed-charter fares, on the theory that the circular only fixes these
+carriers' *system* tickets. The client has since settled it, verbatim:
 
-    پروازهای سیستمی ساها، کاسپین، ماهان با اینکه ما قیمتمون بالاتر هست،
-    تو لیست نرخ گران‌تر نباشه
+    اون ۵ تا ایرلاینی که نرخ مصوب بودند (ساها، کاسپین، ایرتور، ماهان،
+    سپهران) اگر نرخ ما بالاتر هم بود نیاز نیست تو لیست گزارش اکسل باشه
 
-The airline circular fixes the price of these carriers' *system* (published/
-GDS) tickets specifically — it says nothing about charter capacity they sell
-on the side, which is priced the normal negotiated way and *is* a fair
-markup comparison. So the exclusion only applies when ``is_charter`` is not
-``True`` (covers both confirmed-system offers and sources that don't report
-charter/system at all, e.g. mrbilit — safer to under-compare a possible
-charter fare than to keep producing the false "we're too expensive" flag
-this rule exists to fix). A confirmed charter offer from Mahan/Saha/Caspian
-is treated like any other competitor offer.
+— all five carriers, out of the report, regardless of whether we happen to be
+the more expensive one. So there is no charter exemption here any more.
+
+Dropping the carve-out also removes a real inconsistency it caused: sites
+report charter status differently (MySafar and Alibaba flag Caspian charter
+fares as ``is_charter=True``, mrbilit doesn't report it at all), so the same
+Caspian flight was being excluded on one site and compared on another — which
+produced comparison rows built from a partial set of sources.
+
+Airline identity is resolved through :mod:`msbot.airlines`, the same table the
+comparison uses to line up flights across sites. That matters: the previous
+local alias list here missed MySafar's "ایران ایر تور" entirely — the spelling
+has a space, so neither "ایرتور" nor "ایران ایرتور" was a substring of it and
+the code ``B9`` wasn't listed either, so every MySafar Iran Airtour fare
+slipped into the comparison. One shared table means a carrier spelling only
+has to be taught once.
 """
 from __future__ import annotations
 
-import re
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Set
 
+from . import airlines as airlinesmod
 from .models import FlightOffer
 
-#: name/code fragments (lowercased) that identify each regulated airline
-#: across sites — spellings and codes are inconsistent source to source, so
-#: this matches loosely on whatever the scraper populated in
-#: ``airline_name``/``airline_code`` rather than relying on one exact IATA
-#: code.
-DEFAULT_REGULATED_ALIASES: Dict[str, List[str]] = {
-    "mahan": ["ماهان", "mahan", "w5"],
-    "saha": ["ساها", "saha", "irz"],
-    "caspian": ["کاسپین", "caspian"],
-    "iran_airtour": ["ایرتور", "ایران ایرتور", "airtour"],
-    "sepehran": ["سپهران", "sepehran"],
-}
+#: canonical keys (see msbot.airlines.AIRLINE_ALIASES) of the five carriers
+#: whose price is set by the airline's circular.
+DEFAULT_REGULATED_KEYS: List[str] = [
+    "mahan",
+    "saha",
+    "caspian",
+    "iran_airtour",
+    "sepehran",
+]
 
 
-def _normalize(s: Optional[str]) -> str:
-    return re.sub(r"\s+", " ", (s or "").strip().lower())
+def default_keys() -> List[str]:
+    return list(DEFAULT_REGULATED_KEYS)
 
 
-def default_aliases() -> List[str]:
-    flat: List[str] = []
-    for group in DEFAULT_REGULATED_ALIASES.values():
-        flat.extend(group)
-    return flat
-
-
-def resolve_aliases(cfg: Optional[Dict[str, Any]]) -> List[str]:
+def resolve_keys(cfg: Optional[Dict[str, Any]]) -> Set[str]:
     """``cfg`` is the ``regulated_airlines`` block from config.yaml —
-    ``{"enabled": bool, "aliases": [...]}``. Falls back to the defaults above
-    when unset, and returns ``[]`` (no filtering) when explicitly disabled.
+    ``{"enabled": bool, "aliases": [...]}``. Returns the set of canonical
+    airline keys to exclude, or an empty set (no filtering) when disabled.
+
+    ``aliases`` entries may be canonical keys (``"mahan"``), IATA/site codes
+    (``"w5"``) or names in either script (``"ماهان"``) — each is resolved
+    through the shared airline table, so older configs keep working.
     """
     cfg = cfg or {}
     if not cfg.get("enabled", True):
-        return []
+        return set()
     aliases = cfg.get("aliases")
-    return list(aliases) if aliases else default_aliases()
+    if not aliases:
+        return set(DEFAULT_REGULATED_KEYS)
 
-
-def is_regulated(offer: FlightOffer, aliases: Iterable[str]) -> bool:
-    if offer.is_charter is True:
-        return False  # confirmed charter — the airline circular doesn't cover this fare
-    name = _normalize(offer.airline_name)
-    code = _normalize(offer.airline_code)
-    for alias in aliases:
-        a = _normalize(alias)
-        if not a:
+    keys: Set[str] = set()
+    for entry in aliases:
+        text = str(entry or "").strip()
+        if not text:
             continue
-        if a == code or (len(a) >= 3 and a in name):
-            return True
-    return False
+        if text in airlinesmod.AIRLINE_ALIASES:
+            keys.add(text)
+            continue
+        # try it as a code first, then as a name fragment
+        keys.add(airlinesmod.canonical_from(text, text))
+    return keys
+
+
+def is_regulated(offer: FlightOffer, keys: Iterable[str]) -> bool:
+    return airlinesmod.canonical(offer) in set(keys)
 
 
 def split_regulated(
@@ -107,10 +109,10 @@ def split_regulated(
     feed the markup/comparison table; ``regulated`` is kept only for the raw
     offer dump.
     """
-    aliases = resolve_aliases(cfg)
-    if not aliases:
+    keys = resolve_keys(cfg)
+    if not keys:
         return offers, []
     comparable, regulated = [], []
     for o in offers:
-        (regulated if is_regulated(o, aliases) else comparable).append(o)
+        (regulated if is_regulated(o, keys) else comparable).append(o)
     return comparable, regulated

@@ -1,0 +1,4 @@
+{
+  "_comment": "MySafar supplierId -> the consolidator name shown on the admin view of a flight. Copy to data/suppliers.json. The public search API returns only the id; GET /v1/supplier would name them but needs an admin session (401 otherwise), so this mapping is supplied by hand. Unlisted ids leave the column blank.",
+  "692c0c90b3108118fb8a6ead": "سپید پرواز توسن"
+}

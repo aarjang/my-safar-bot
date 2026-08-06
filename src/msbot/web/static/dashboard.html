@@ -123,6 +123,8 @@
   tbody td{padding:10px;border-bottom:1px solid #f1f2f6;vertical-align:middle;white-space:nowrap}
   tbody tr:hover{background:#fafaff}
   .price{font-weight:700;font-variant-numeric:tabular-nums}
+  .flight b{font-variant-numeric:tabular-nums}
+  .flight .al{display:block;font-size:11px;color:var(--muted);white-space:nowrap}
   .min{color:var(--down);font-weight:800}
   .na{color:var(--warn)}
   .sub{color:var(--muted);font-size:11px}
@@ -605,6 +607,8 @@ function filteredRows(){
     // string-valued columns get a real string comparison, not numeric subtraction
     if(key==='date_jalali') return x.date<y.date ? -dir : x.date>y.date ? dir : 0;
     if(key==='cabin'){ const a=CABIN_FA[x.cabin]||x.cabin||'', b=CABIN_FA[y.cabin]||y.cabin||''; return a<b?-dir:a>b?dir:0; }
+    // "HH:MM" sorts correctly as a string; subtracting it would give NaN
+    if(key==='departure'){ const a=x.departure||'', b=y.departure||''; return a<b?-dir:a>b?dir:0; }
     // everything else reduces to a comparable number
     let av, bv;
     if (key==='diff') { av=rowDiff(x); bv=rowDiff(y); }
@@ -698,6 +702,7 @@ function renderRate(){
   let html = `<thead><tr>
     <th data-sort="date_jalali">تاریخ<span class="ar">${arrow('date_jalali')}</span></th>
     <th>روز</th>
+    <th data-sort="departure">پرواز<span class="ar">${arrow('departure')}</span></th>
     <th data-sort="cabin">کلاس<span class="ar">${arrow('cabin')}</span><br>${cabinFilter}</th>
     <th data-sort="mysafar_toman">نرخ مای‌سفر<span class="ar">${arrow('mysafar_toman')}</span></th>
     <th data-sort="pattern_ok">بررسی الگو<span class="ar">${arrow('pattern_ok')}</span></th>
@@ -706,7 +711,7 @@ function renderRate(){
     <th data-sort="diff">اختلاف<span class="ar">${arrow('diff')}</span></th>
     <th data-sort="dir">وضعیت<span class="ar">${arrow('dir')}</span><br>${dirFilter}</th>
   </tr></thead><tbody>`;
-  const colCount = 9+active.length;
+  const colCount = 10+active.length;
   if (!state.jobId) {
     html += `<tr><td colspan="${colCount}"><div class="empty">هنوز استعلامی اجرا نشده. مبدأ/مقصد و بازهٔ تاریخ را انتخاب و «تحلیل نرخ‌ها» را بزنید.</div></td></tr>`;
   } else if (!rows.length) {
@@ -721,8 +726,10 @@ function renderRate(){
           ? ` title="${(r.primary_diff_toman>0?'+':'')}${fmt(r.primary_diff_toman)} ت نسبت به ما"` : '';
         return v==null ? `<td class="na">—</td>` : `<td class="price ${isMin(id)?'min':''}"${primaryTitle} style="${id===primary?'background:#fffbeb':''}">${fmt(v)}</td>`;
       }).join('');
-      html += `<tr><td>${r.date_jalali}</td><td>${r.weekday}</td><td>${CABIN_FA[r.cabin]||r.cabin}</td>
-        <td class="price"${r.mysafar_airline?` title="${esc(r.mysafar_airline)}"`:''}>${fmt(r.mysafar_toman)}</td>
+      html += `<tr><td>${r.date_jalali}</td><td>${r.weekday}</td>
+        <td class="flight">${r.departure?`<b>${esc(r.departure)}</b>`:''}${r.airline?`<span class="al">${esc(r.airline)}</span>`:''}</td>
+        <td>${CABIN_FA[r.cabin]||r.cabin}</td>
+        <td class="price"${r.mysafar_supplier?` title="تأمین‌کننده: ${esc(r.mysafar_supplier)}"`:''}>${fmt(r.mysafar_toman)}</td>
         <td>${patternBadge(r)}</td>
         ${comps}
         <td class="price">${r.market_min_toman==null?'<span class="na">—</span>':fmt(r.market_min_toman)}</td>
