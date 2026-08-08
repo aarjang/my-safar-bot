@@ -125,6 +125,10 @@
   .price{font-weight:700;font-variant-numeric:tabular-nums}
   .flight b{font-variant-numeric:tabular-nums}
   .flight .al{display:block;font-size:11px;color:var(--muted);white-space:nowrap}
+  .fare-tag{display:inline-block;margin-top:2px;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;white-space:nowrap}
+  .fare-tag.charter{background:var(--warn-bg);color:var(--warn)}
+  .fare-tag.system{background:var(--eq-bg);color:var(--eq)}
+  .fare-tag.unknown{background:var(--na-bg,#f1f1f1);color:var(--muted)}
   .min{color:var(--down);font-weight:800}
   .na{color:var(--warn)}
   .sub{color:var(--muted);font-size:11px}
@@ -309,6 +313,12 @@ const pad2 = n => (n<10?'0':'')+n;
 const fmt = n => (n==null ? '—' : Number(n).toLocaleString('fa-IR'));
 const pctFmt = n => (n==null?'—':(n>0?'+':'') + n.toLocaleString('fa-IR',{maximumFractionDigits:1}) + '٪');
 const CABIN_FA = {economy:'اکونومی', premium_economy:'پرمیوم اکونومی', business:'بیزینس', first:'فرست', unknown:'نامشخص'};
+const FARE_TYPE_FA = {charter:'چارتری', system:'سیستمی', unknown:'نامشخص'};
+function fareTypeTag(r){
+  const t = FARE_TYPE_FA[r.fare_type] || null;
+  if (!t) return '';
+  return `<span class="fare-tag ${r.fare_type}">${t}</span>`;
+}
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -628,7 +638,7 @@ function renderPatternNote(){
   const d = p.default;
   const reg = state.meta?.regulated_airlines;
   const regNote = (reg && reg.enabled && reg.names_fa && reg.names_fa.length)
-    ? ` پروازهای <b>${reg.names_fa.join('، ')}</b> از این مقایسه مستثنی‌اند — نرخ این ایرلاین‌ها طبق بخشنامهٔ خودشان مصوب است و اختلاف رقبا در موردشان به مارک‌آپ ما ربطی ندارد.`
+    ? ` پروازهای <b>سیستمی</b> <b>${reg.names_fa.join('، ')}</b> از این مقایسه مستثنی‌اند — نرخ این ایرلاین‌ها طبق بخشنامهٔ خودشان مصوب است و اختلاف رقبا در موردشان به مارک‌آپ ما ربطی ندارد. پروازهای <b>چارتری</b> همین ایرلاین‌ها در مقایسه می‌مانند و با برچسب «چارتری»/«سیستمی» کنار هر پرواز مشخص شده‌اند.`
     : '';
   $('patternNote').innerHTML = `<b>الگوی مورد انتظار (طبق روال فعلی شما):</b> اولویت اصلی مقایسه با <b>${primaryLabel}</b> است — برای اکونومی، نرخ مای‌سفر معمولاً باید <b>${fmt(d.primary_diff_toman_min)} تا ${fmt(d.primary_diff_toman_max)} تومان</b> پایین‌تر از آن باشد، و از سایر رقبا <b>${fmt(d.other_diff_toman_min)} تا ${fmt(d.other_diff_toman_max)} تومان</b> ارزان‌تر. بیزینس/پرمیوم/فرست هرکدام بازهٔ جدای خودشان را دارند (تب «تنظیمات مارک‌آپ»، قابل ویرایش). ردیف‌هایی که از بازهٔ کلاس خودشان خارج شوند با برچسب «نیاز به بررسی مارک‌آپ» علامت می‌خورند.${regNote}`;
 }
@@ -727,7 +737,7 @@ function renderRate(){
         return v==null ? `<td class="na">—</td>` : `<td class="price ${isMin(id)?'min':''}"${primaryTitle} style="${id===primary?'background:#fffbeb':''}">${fmt(v)}</td>`;
       }).join('');
       html += `<tr><td>${r.date_jalali}</td><td>${r.weekday}</td>
-        <td class="flight">${r.departure?`<b>${esc(r.departure)}</b>`:''}${r.airline?`<span class="al">${esc(r.airline)}</span>`:''}</td>
+        <td class="flight">${r.departure?`<b>${esc(r.departure)}</b>`:''}${r.airline?`<span class="al">${esc(r.airline)}</span>`:''}${fareTypeTag(r)}</td>
         <td>${CABIN_FA[r.cabin]||r.cabin}</td>
         <td class="price"${r.mysafar_supplier?` title="تأمین‌کننده: ${esc(r.mysafar_supplier)}"`:''}>${fmt(r.mysafar_toman)}</td>
         <td>${patternBadge(r)}</td>

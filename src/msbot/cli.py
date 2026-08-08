@@ -102,7 +102,7 @@ def cmd_scrape(args: argparse.Namespace) -> int:
 
     comp = comparison_frame(offers, base_strategy, base_table, pattern_cfg=pattern_cfg, regulated_cfg=regulated_cfg)
     if not comp.empty:
-        cols = [c for c in comp.columns if c.endswith("_toman") or c in ("route", "date", "departure", "airline", "cabin")]
+        cols = [c for c in comp.columns if c.endswith("_toman") or c in ("route", "date", "departure", "airline", "cabin", "fare_type")]
         print()
         print(comp[cols].to_string(index=False))
 
@@ -114,7 +114,7 @@ def cmd_scrape(args: argparse.Namespace) -> int:
                 len(anomalies), pattern_cfg.primary_source, eco.primary_min, eco.primary_max,
                 eco.other_min, eco.other_max,
             ))
-            print(anomalies[["route", "date", "departure", "airline", "cabin", "mysafar_toman", "primary_diff_toman", "anomaly_reason"]].to_string(index=False))
+            print(anomalies[["route", "date", "departure", "airline", "cabin", "fare_type", "mysafar_toman", "primary_diff_toman", "anomaly_reason"]].to_string(index=False))
 
     failures = [r for r in results if not r.ok]
     if failures:

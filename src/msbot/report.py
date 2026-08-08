@@ -105,6 +105,10 @@ def comparison_frame(
             # the row's own airline, taken from whichever site named it — so a
             # flight we don't sell still shows its carrier rather than a blank.
             "airline": airlinesmod.display_name(cell),
+            # چارتری/سیستمی/نامشخص — see msbot.regulated.fare_type. Shown for
+            # every flight, not just the five regulated airlines: the client
+            # asked to be able to tell the two apart at a glance everywhere.
+            "fare_type": regulatedmod.fare_type(cell),
             "base_fare_toman": base_fare // 10 if base_fare else None,
             "base_fare_source": base_label,
         }
@@ -188,24 +192,32 @@ def light_report_frame(
     thresholds, same regulated-airline exclusion — just narrowed to what's
     actually actionable for a manual markup review:
 
-    * only the 10 columns asked for (route/date/cabin/airline + each site's
-      price), dropping the diff/%/base-fare columns that make the full
-      export slow to scan;
-    * only rows that need a look: outside the expected pattern for their
-      cabin (``pattern_ok is False``), *or* a flight a competitor sells that
-      we don't (``mysafar_toman`` is empty) — rows that are simply fine
-      (``pattern_ok is True``) are the ones this is meant to filter out.
+    * only the columns asked for (route/date/time/cabin/airline/fare type +
+      each site's price), dropping the diff/%/base-fare columns that make
+      the full export slow to scan;
+    * only rows that need a look — everything *except* a confirmed-fine
+      flight (``pattern_ok is True``). That is deliberately not the same as
+      "``pattern_ok is False``": a flight with no competitor match at all
+      (we have a price, nobody else does — 7 real flights on the client's
+      own route/date) evaluates to ``pattern_ok is None``, since there is
+      nothing to compare against. The old filter treated that the same as
+      "confirmed fine" and silently dropped it — flights visible in the
+      dashboard's full comparison were missing from this export. ``!= True``
+      is the one condition that correctly keeps both directions of "only one
+      side has this flight" (competitor-only *and* us-only) plus every
+      genuine anomaly, while still dropping rows that are actually fine.
     """
     comp = comparison_frame(offers, base_strategy, base_table, pattern_cfg=pattern_cfg, regulated_cfg=regulated_cfg)
     if comp.empty:
         return comp
 
-    flagged = comp[(comp["pattern_ok"] == False) | (comp["mysafar_toman"].isna())]  # noqa: E712
+    flagged = comp[comp["pattern_ok"] != True]  # noqa: E712
+    columns = [
+        "مسیر", "تاریخ", "ساعت", "کابین", "ایرلاین", "نوع بلیط", "تأمین‌کننده", "نرخ مای‌سفر",
+        *[label for _, label in LIGHT_SOURCE_COLUMNS],
+    ]
     if flagged.empty:
-        return pd.DataFrame(columns=[
-            "مسیر", "تاریخ", "ساعت", "کابین", "ایرلاین", "نرخ مای‌سفر",
-            *[label for _, label in LIGHT_SOURCE_COLUMNS],
-        ])
+        return pd.DataFrame(columns=columns)
 
     out = pd.DataFrame({
         "مسیر": flagged["route"],
@@ -218,6 +230,10 @@ def light_report_frame(
         # the flight's own airline, not just the one on our listing, so rows
         # for flights we don't sell still name the carrier.
         "ایرلاین": flagged["airline"],
+        # چارتری/سیستمی/نامشخص for every row, not just the five regulated
+        # airlines — the client asked to be able to tell them apart at a
+        # glance across the whole report, not just infer it from absence.
+        "نوع بلیط": flagged["fare_type"].map(lambda t: regulatedmod.FARE_TYPE_FA.get(t, t)),
         "تأمین‌کننده": flagged["mysafar_supplier"],
         "نرخ مای‌سفر": flagged["mysafar_toman"],
     })
@@ -225,7 +241,7 @@ def light_report_frame(
         col = "{}_toman".format(source_id)
         out[label] = flagged[col] if col in flagged.columns else None
 
-    return out.sort_values(["مسیر", "تاریخ", "ساعت"], na_position="last")
+    return out[columns].sort_values(["مسیر", "تاریخ", "ساعت"], na_position="last")
 
 
 def write_reports(
