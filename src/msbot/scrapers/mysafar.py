@@ -41,6 +41,41 @@ Together these explain reports of an airline (e.g. Sepehran) showing up in
 the client's report with no MySafar price and an unclear fare type: if that
 airline's supplier answered anywhere other than the very first response, our
 own price for it was being dropped before it ever reached the comparison.
+
+**A third, separate issue, found chasing that same Sepehran report** — this
+one not a scraping bug, a *data* one. For one route/date the API returned
+*two* distinct offers for the exact same physical flight (same flight
+number, same departure time): one ``flightKey": "7316-..."``,
+``flightType: "webservice"`` (system), ``bookingPolicy: null``, priced
+19,000,000 Toman; and one ``flightKey: "SP7316-..."`` (note the ``SP``
+prefix), ``flightType: "charter"``, ``bookingPolicy: {"restrictedForTour":
+true, ...}``, priced 15,190,400 Toman. Taking the cheapest of our own
+offers per flight — the normal, correct rule everywhere else — picked the
+second one. But a screenshot of mysafar.com's real search results for that
+exact route/date shows only 3 flights, every one tagged سیستمی, at prices
+matching the *first* (system) offer — the ``SP``-prefixed, tour-restricted
+twin is never shown to a real customer at all.
+
+The first version of this fix dropped *every* ``restrictedForTour`` offer
+outright, on the theory that the flag itself means "not real, not sold".
+That was one data point stretched into a universal rule, and it broke a
+different flight almost immediately: a Qeshm Air system fare (19,170,800
+Toman, IST-THR) vanished from the report entirely. There was no second,
+non-restricted Qeshm offer for that flight to have preferred instead — this
+was apparently the *only* price MySafar had for it, just carrying the same
+flag for some unrelated reason (a round-trip-only condition, a fare rule,
+who knows). Dropping a flight's only known price on an unverified guess
+about one field is worse than the phantom-duplicate problem it was meant to
+solve.
+
+So the rule is now specifically "prefer the twin, never discard the only
+copy": offers are grouped by the flight they actually describe — airline,
+cabin, and departure time (*not* ``flightKey``/``supplierId``, which is
+exactly what differs between the ``7316``/``SP7316`` pair) — and a
+``restrictedForTour`` offer is dropped only when a non-restricted offer for
+that *same* flight also exists in the same batch. A restricted offer with no
+such twin is kept, restriction flag and all; it's still whatever real price
+MySafar returned, and hiding it entirely was the actual bug being chased.
 """
 from __future__ import annotations
 
@@ -97,7 +132,8 @@ class MySafarScraper(BaseScraper):
                 if more.get("finished"):
                     break
 
-        return [self._to_offer(it, route, day) for it in items.values() if it.get("adultFare")]
+        priced = [it for it in items.values() if it.get("adultFare")]
+        return [self._to_offer(it, route, day) for it in _drop_redundant_tour_offers(priced)]
 
     def _to_offer(self, it: Dict[str, Any], route: RouteSpec, day: str) -> FlightOffer:
         airline = it.get("airlineDetail") or {}
@@ -129,6 +165,33 @@ class MySafarScraper(BaseScraper):
                 "infantFare": it.get("infantFare"),
             },
         )
+
+
+def _is_tour_restricted(it: Dict[str, Any]) -> bool:
+    return bool((it.get("bookingPolicy") or {}).get("restrictedForTour"))
+
+
+def _flight_identity(it: Dict[str, Any]) -> tuple:
+    """Same physical flight, independent of which fare/product wraps it —
+    unlike ``flightKey``, which is exactly what differs between a system
+    offer (``"7316-..."``) and its tour-restricted twin (``"SP7316-..."``).
+    """
+    return (it.get("airline"), it.get("cabinType"), it.get("originLocalTime"))
+
+
+def _drop_redundant_tour_offers(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Drop a ``restrictedForTour`` offer only when a non-restricted offer
+    for the *same flight* also exists — see the module docstring for why a
+    restricted offer with no such twin must be kept rather than discarded.
+    """
+    has_real_twin = set()
+    for it in items:
+        if not _is_tour_restricted(it):
+            has_real_twin.add(_flight_identity(it))
+    return [
+        it for it in items
+        if not (_is_tour_restricted(it) and _flight_identity(it) in has_real_twin)
+    ]
 
 
 def _collect(bucket: Dict[str, Dict[str, Any]], items: List[Dict[str, Any]]) -> None:
